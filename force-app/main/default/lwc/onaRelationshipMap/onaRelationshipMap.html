@@ -1,0 +1,282 @@
+<template>
+    <div class={appClass}>
+
+        <!-- Header -->
+        <div class="ona-hdr">
+            <span class="ona-logo">ONA</span>
+            <div class="ona-sep"></div>
+            <span class="ona-appname">Relationship Intelligence</span>
+
+            <div class="ona-search-wrap">
+                <input type="text" class="ona-search"
+                       placeholder="Search account..."
+                       value={searchTerm}
+                       oninput={handleSearch}
+                       onfocus={handleSearchFocus}
+                       onblur={handleSearchBlur}/>
+                <template if:true={showDropdown}>
+                    <div class="ona-dropdown">
+                        <template for:each={accountResults} for:item="acc">
+                            <div key={acc.Id} class="ona-ditem"
+                                 data-id={acc.Id} data-name={acc.Name}
+                                 onmousedown={selectAccount}>
+                                <span class="ona-dname">{acc.Name}</span>
+                                <span class="ona-dindustry">{acc.Industry}</span>
+                            </div>
+                        </template>
+                        <template if:false={hasResults}>
+                            <div class="ona-ditem">
+                                <span class="ona-dname" style="color:var(--t3)">No accounts found</span>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+
+            <div class="ona-hdr-right">
+                <div class="ona-vtog">
+                    <button class={accBtnClass} onclick={handleAccountMode}>Account</button>
+                    <button class={glbBtnClass} onclick={handleGlobalMode}>Cross-Account</button>
+                </div>
+                <template if:true={isGlobal}>
+                    <select class="ona-sel" onchange={handleIndustry}>
+                        <option value="">All industries</option>
+                        <option value="Technology">Technology</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Healthcare">Healthcare</option>
+                        <option value="Manufacturing">Manufacturing</option>
+                        <option value="Retail">Retail</option>
+                    </select>
+                </template>
+                <button class="ona-theme-btn" onclick={handleTheme}>{themeIcon}</button>
+                <button class="ona-guide-btn" onclick={handleGuide}>? Guide</button>
+                <button class="ona-hbtn" onclick={handleRefresh}>Refresh</button>
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="ona-body">
+
+            <!-- Left panel -->
+            <div class="ona-lpanel">
+                <div class="ona-lps">
+                    <span class="ona-lpt">Network metrics</span>
+                    <div class="ona-kgrid">
+                        <div class="ona-kpi"><div class="ona-kval">{stats.totalContacts}</div><div class="ona-klbl">Contacts</div></div>
+                        <div class="ona-kpi"><div class="ona-kval">{stats.totalEdges}</div><div class="ona-klbl">Relationships</div></div>
+                        <div class="ona-kpi"><div class="ona-kval">{stats.hubCount}</div><div class="ona-klbl">Hubs</div></div>
+                        <div class="ona-kpi"><div class="ona-kval">{stats.clusterCount}</div><div class="ona-klbl">Clusters</div></div>
+                    </div>
+                </div>
+
+                <div class="ona-lps">
+                    <span class="ona-lpt">Insight questions</span>
+                    <div class={iq1Class} data-mode="connections" onclick={handleHL}><div class="ona-iqn">Q1 · Connectivity</div>How are contacts connected?</div>
+                    <div class={iq2Class} data-mode="influence"   onclick={handleHL}><div class="ona-iqn">Q2 · Influence</div>Who are the most influential?</div>
+                    <div class={iq3Class} data-mode="centrality"  onclick={handleHL}><div class="ona-iqn">Q3 · Centrality</div>Who is central to communication?</div>
+                    <div class={iq4Class} data-mode="engage"      onclick={handleHL}><div class="ona-iqn">Q4 · Engagement</div>Who should I engage next?</div>
+                </div>
+
+                <template if:true={hasConnections}>
+                    <div class="ona-lps">
+                        <span class="ona-lpt">Connections of {connNodeName}</span>
+                        <template for:each={connList} for:item="conn">
+                            <div key={conn.id} class="ona-conn-item">
+                                <div class="ona-conn-dot" style={conn.dotStyle}></div>
+                                <span class="ona-conn-name">{conn.name}</span>
+                                <span class="ona-conn-str" style={conn.strStyle}>{conn.strength}</span>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <div class="ona-lps">
+                    <span class="ona-lpt">Node types</span>
+                    <div class="ona-legrow"><div class="ona-legdot" style="background:#b45309"></div>Hub — high centrality</div>
+                    <div class="ona-legrow"><div class="ona-legdot" style="background:#0369a1"></div>Active connector</div>
+                    <div class="ona-legrow"><div class="ona-legdot" style="background:#4338ca"></div>Cross-account bridge</div>
+                    <div class="ona-legrow"><div class="ona-legdot" style="background:#94a3b8"></div>Low engagement</div>
+                </div>
+
+                <div class="ona-lps">
+                    <span class="ona-lpt">Edge strength</span>
+                    <div class="ona-legrow">
+                        <svg width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#b45309" stroke-width="3" stroke-opacity="0.85"/></svg>
+                        Strong (≥ 15)
+                    </div>
+                    <div class="ona-legrow">
+                        <svg width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#4a7fa8" stroke-width="1.8" stroke-opacity="0.65"/></svg>
+                        Medium (6–14)
+                    </div>
+                    <div class="ona-legrow">
+                        <svg width="28" height="10"><line x1="0" y1="5" x2="28" y2="5" stroke="#b0bec5" stroke-width="1.2" stroke-dasharray="5,4" stroke-opacity="0.40"/></svg>
+                        Weak (2–5)
+                    </div>
+                </div>
+            </div>
+
+            <!-- Graph canvas -->
+            <div class="ona-garea" lwc:ref="graphContainer">
+
+                <template if:true={isLoading}>
+                    <div class="ona-state">
+                        <div class="ona-spinner"></div>
+                        <div class="ona-state-title">Building relationship network...</div>
+                    </div>
+                </template>
+
+                <template if:true={showEmpty}>
+                    <div class="ona-state">
+                        <div class="ona-state-ico">◎</div>
+                        <div class="ona-state-title">Select an account to begin</div>
+                        <div class="ona-state-sub">Search for an account above or switch to Cross-Account view</div>
+                    </div>
+                </template>
+
+                <template if:true={hasError}>
+                    <div class="ona-state">
+                        <div class="ona-state-title" style="color:#dc2626">Could not load network</div>
+                        <div class="ona-state-sub">{errorMsg}</div>
+                        <button class="ona-hbtn" onclick={handleRefresh}>Try again</button>
+                    </div>
+                </template>
+
+                <div lwc:ref="svgContainer" class="ona-svg-cont"></div>
+
+                <div class={tipClass} lwc:ref="graphTooltip">
+                    <div class="ona-tn">{tip.name}</div>
+                    <div class="ona-tr">{tip.role}</div>
+                    <div class="ona-ta">{tip.acct}</div>
+                    <div class="ona-tsc">
+                        <div class="ona-tsi"><span class="ona-tsv">{tip.inf}</span><span class="ona-tsl">Influence</span></div>
+                        <div class="ona-tsi"><span class="ona-tsv">{tip.cen}</span><span class="ona-tsl">Centrality</span></div>
+                        <div class="ona-tsi"><span class="ona-tsv">{tip.con}</span><span class="ona-tsl">Connections</span></div>
+                    </div>
+                </div>
+
+                <div class="ona-zctrls">
+                    <button class="ona-zbtn" onclick={handleZoomIn}>+</button>
+                    <button class="ona-zbtn" onclick={handleZoomOut}>−</button>
+                    <button class="ona-zbtn" onclick={handleZoomReset}>↺</button>
+                </div>
+                <div class="ona-ghint">Click a node to see connections · Click canvas to reset</div>
+            </div>
+
+            <!-- Right insight panel -->
+            <div class={panelClass}>
+
+                <!-- Fixed header — never scrolls -->
+                <div class="ona-iph">
+                    <div class="ona-ipav" style={avStyle}>{contact.initials}</div>
+                    <div style="flex:1;min-width:0">
+                        <div class="ona-ipname">{contact.name}</div>
+                        <div class="ona-iprole">{contact.title}</div>
+                        <div class="ona-ipacct">{contact.accountName}</div>
+                        <div class="ona-ipdept">{contact.department}</div>
+                        <div class="ona-ipbadge" style={badgeStyle}>{contact.networkRole}</div>
+                    </div>
+                    <button class="ona-xbtn" onclick={closePanel}>✕</button>
+                </div>
+
+                <!-- Everything below the header scrolls -->
+                <div class="ona-rpanel-scroll">
+
+                <div class="ona-ips">
+                    <span class="ona-ipst">ONA scores</span>
+                    <div class="ona-sgrid">
+                        <div class="ona-sc"><div class="ona-scv">{contact.influenceScore}</div><div class="ona-scl">Influence</div><div class="ona-sbar"><div class="ona-sfill" style={infBarStyle}></div></div><div class="ona-scd">{contact.influenceDesc}</div></div>
+                        <div class="ona-sc"><div class="ona-scv">{contact.centralityScore}</div><div class="ona-scl">Centrality</div><div class="ona-sbar"><div class="ona-sfill" style={cenBarStyle}></div></div><div class="ona-scd">{contact.centralityDesc}</div></div>
+                        <div class="ona-sc"><div class="ona-scv">{contact.interactionScore}</div><div class="ona-scl">Interaction</div><div class="ona-sbar"><div class="ona-sfill" style={intBarStyle}></div></div><div class="ona-scd">{contact.interactionDesc}</div></div>
+                        <div class="ona-sc"><div class="ona-scv">{contact.connectionCount}</div><div class="ona-scl">Connections</div><div class="ona-sbar"><div class="ona-sfill" style={conBarStyle}></div></div><div class="ona-scd">{contact.connectionsDesc}</div></div>
+                    </div>
+                </div>
+
+                <div class="ona-ips">
+                    <span class="ona-ipst">Activity summary (12 months)</span>
+                    <div class="ona-apills">
+                        <div class="ona-ap"><div class="ona-apv">{contact.emailCount}</div><div class="ona-apl">Emails</div></div>
+                        <div class="ona-ap"><div class="ona-apv">{contact.meetingCount}</div><div class="ona-apl">Meetings</div></div>
+                        <div class="ona-ap"><div class="ona-apv">{contact.taskCount}</div><div class="ona-apl">Tasks</div></div>
+                    </div>
+                    <div class="ona-lastact">{contact.lastAct}</div>
+                </div>
+
+                <div class="ona-ips">
+                    <span class="ona-ipst">Recent activity</span>
+                    <template if:true={loadingInsight}>
+                        <div class="ona-ipempty">Loading...</div>
+                    </template>
+                    <template for:each={timeline} for:item="act">
+                        <div key={act.id} class="ona-tlitem">
+                            <div class="ona-tldot" style={act.dotStyle}></div>
+                            <div>
+                                <div class="ona-tltext">{act.subject}</div>
+                                <div class="ona-tldate">{act.activityDate}</div>
+                                <span class="ona-tlbadge" style={act.badgeStyle}>{act.activityType}</span>
+                            </div>
+                        </div>
+                    </template>
+                    <template if:false={hasTimeline}>
+                        <template if:false={loadingInsight}>
+                            <div class="ona-ipempty">No recent activity logged.</div>
+                        </template>
+                    </template>
+                </div>
+
+                <div class="ona-ips ona-ipslast">
+                    <span class="ona-ipst">Recommended next engagements</span>
+                    <template for:each={recos} for:item="reco">
+                        <div key={reco.candidate.contactId} class="ona-rcard"
+                             data-id={reco.candidate.contactId} onclick={handleRecoClick}>
+                            <div class="ona-rtop">
+                                <div class="ona-rav" style={reco.avStyle}>{reco.candidate.initials}</div>
+                                <div>
+                                    <div class="ona-rname">{reco.candidate.name}</div>
+                                    <div class="ona-rrole">{reco.candidate.title}</div>
+                                </div>
+                                <span class="ona-rbadge" style={reco.badgeStyle}>{reco.priority}</span>
+                            </div>
+                            <div class="ona-rwhy">{reco.reason}</div>
+                        </div>
+                    </template>
+                    <template if:false={hasRecos}>
+                        <template if:false={loadingInsight}>
+                            <div class="ona-ipempty">All contacts already connected.</div>
+                        </template>
+                    </template>
+                </div>
+
+                </div><!-- /ona-rpanel-scroll -->
+            </div>
+
+        </div>
+
+        <!-- ── Guided Tour Overlay ───────────────────────────────── -->
+        <template if:true={guideOpen}>
+            <div class="ona-guide-overlay" onclick={handleGuideOverlayClick}>
+                <div class="ona-spotlight" style={spotlightStyle}></div>
+                <div class="ona-guide-card" style={guideCardStyle} onclick={stopProp}>
+                    <div class="ona-gc-top">
+                        <span class="ona-gc-step">{guideStepLabel}</span>
+                        <button class="ona-gc-close" onclick={closeGuide}>✕</button>
+                    </div>
+                    <div class="ona-gc-title">{currentGuideStep.title}</div>
+                    <div class="ona-gc-body">{currentGuideStep.body}</div>
+                    <template if:true={currentGuideStep.tip}>
+                        <div class="ona-gc-tip">{currentGuideStep.tip}</div>
+                    </template>
+                    <div class="ona-gc-nav">
+                        <button class="ona-gc-prev" onclick={guidePrev} disabled={isFirstStep}>← Back</button>
+                        <div class="ona-gc-dots">
+                            <template for:each={guideDots} for:item="dot">
+                                <div key={dot.i} class={dot.cls}></div>
+                            </template>
+                        </div>
+                        <button class="ona-gc-next" onclick={guideNext}>{guideNextLabel}</button>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+    </div>
+</template>

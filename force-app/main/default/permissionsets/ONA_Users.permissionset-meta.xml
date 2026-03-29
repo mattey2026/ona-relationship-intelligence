@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Grants access to ONA Relationship Intelligence</description>
+    <label>ONA Users</label>
+    <license>Salesforce</license>
+    <tabSettings>
+        <tab>ONAMain</tab>
+        <visibility>Available</visibility>
+    </tabSettings>
+</PermissionSet>
