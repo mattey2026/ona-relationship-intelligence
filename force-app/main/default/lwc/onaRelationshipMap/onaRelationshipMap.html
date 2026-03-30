@@ -6,6 +6,7 @@
             <span class="ona-logo">ONA</span>
             <div class="ona-sep"></div>
             <span class="ona-appname">Relationship Intelligence</span>
+            <span class="ona-badge-new">Phase 2</span>
 
             <div class="ona-search-wrap">
                 <input type="text" class="ona-search"
@@ -59,6 +60,8 @@
 
             <!-- Left panel -->
             <div class="ona-lpanel">
+
+                <!-- KPIs -->
                 <div class="ona-lps">
                     <span class="ona-lpt">Network metrics</span>
                     <div class="ona-kgrid">
@@ -69,14 +72,60 @@
                     </div>
                 </div>
 
+                <!-- Account Intelligence — NEW Phase 2 section -->
+                <template if:true={hasAccountIntel}>
+                    <div class="ona-lps">
+                        <span class="ona-lpt">Account intelligence <span class="ona-lpt-badge">New</span></span>
+
+                        <!-- Coverage Score -->
+                        <div class="ona-ai-metric">
+                            <div class="ona-ai-label">
+                                <span>Coverage score</span>
+                                <span class="ona-ai-badge" style={covBadgeStyle}>{accountIntel.coverageBadge}</span>
+                            </div>
+                            <div class="ona-ai-val">{accountIntel.coverageScore}%</div>
+                            <div class="ona-sbar"><div class="ona-sfill" style={covBarStyle}></div></div>
+                            <div class="ona-ai-desc">{covDesc}</div>
+                        </div>
+
+                        <!-- Multi-thread Risk -->
+                        <div class="ona-ai-metric">
+                            <div class="ona-ai-label">
+                                <span>Multi-thread risk</span>
+                                <span class="ona-ai-badge" style={mtBadgeStyle}>{accountIntel.multiThreadBadge}</span>
+                            </div>
+                            <div class="ona-ai-val">{accountIntel.multiThreadScore}%</div>
+                            <div class="ona-sbar"><div class="ona-sfill" style={mtBarStyle}></div></div>
+                            <div class="ona-ai-desc">{mtDesc}</div>
+                        </div>
+
+                        <!-- Whitespace gaps -->
+                        <div style="margin-top:6px">
+                            <div class="ona-ws-title">Whitespace gaps</div>
+                            <template for:each={whitespace} for:item="ws">
+                                <div key={ws.department} class="ona-ws-item">
+                                    <span class="ona-ws-dept">{ws.department}</span>
+                                    <span class="ona-ws-status" style={ws.statusStyle}>{ws.statusLabel}</span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Insight questions -->
                 <div class="ona-lps">
                     <span class="ona-lpt">Insight questions</span>
                     <div class={iq1Class} data-mode="connections" onclick={handleHL}><div class="ona-iqn">Q1 · Connectivity</div>How are contacts connected?</div>
                     <div class={iq2Class} data-mode="influence"   onclick={handleHL}><div class="ona-iqn">Q2 · Influence</div>Who are the most influential?</div>
                     <div class={iq3Class} data-mode="centrality"  onclick={handleHL}><div class="ona-iqn">Q3 · Centrality</div>Who is central to communication?</div>
                     <div class={iq4Class} data-mode="engage"      onclick={handleHL}><div class="ona-iqn">Q4 · Engagement</div>Who should I engage next?</div>
+                    <div class={iq5Class} data-mode="velocity"    onclick={handleHL}>
+                        <div class="ona-iqn">Q5 · Velocity <span class="ona-lpt-badge">New</span></div>
+                        Which relationships are warming up?
+                    </div>
                 </div>
 
+                <!-- Connection list (appears on node click) -->
                 <template if:true={hasConnections}>
                     <div class="ona-lps">
                         <span class="ona-lpt">Connections of {connNodeName}</span>
@@ -90,14 +139,24 @@
                     </div>
                 </template>
 
+                <!-- Node legend -->
                 <div class="ona-lps">
                     <span class="ona-lpt">Node types</span>
-                    <div class="ona-legrow"><div class="ona-legdot" style="background:#b45309"></div>Hub — high centrality</div>
+                    <div class="ona-legrow"><div class="ona-legdot" style="background:#b45309"></div>Hub — centrality ≥ 70</div>
                     <div class="ona-legrow"><div class="ona-legdot" style="background:#0369a1"></div>Active connector</div>
                     <div class="ona-legrow"><div class="ona-legdot" style="background:#4338ca"></div>Cross-account bridge</div>
                     <div class="ona-legrow"><div class="ona-legdot" style="background:#94a3b8"></div>Low engagement</div>
                 </div>
 
+                <!-- Velocity legend - NEW -->
+                <div class="ona-lps">
+                    <span class="ona-lpt">Velocity indicators <span class="ona-lpt-badge">New</span></span>
+                    <div class="ona-legrow"><span class="ona-vel-arrow" style="color:#059669">↑</span> Growing — activity up</div>
+                    <div class="ona-legrow"><span class="ona-vel-arrow" style="color:#dc2626">↓</span> Cooling — activity down</div>
+                    <div class="ona-legrow"><span class="ona-vel-arrow" style="color:#94a3b8">→</span> Stable — no change</div>
+                </div>
+
+                <!-- Edge strength legend -->
                 <div class="ona-lps">
                     <span class="ona-lpt">Edge strength</span>
                     <div class="ona-legrow">
@@ -113,6 +172,7 @@
                         Weak (2–5)
                     </div>
                 </div>
+
             </div>
 
             <!-- Graph canvas -->
@@ -121,7 +181,7 @@
                 <template if:true={isLoading}>
                     <div class="ona-state">
                         <div class="ona-spinner"></div>
-                        <div class="ona-state-title">Building relationship network...</div>
+                        <div class="ona-state-title">Building relationship network…</div>
                     </div>
                 </template>
 
@@ -143,6 +203,7 @@
 
                 <div lwc:ref="svgContainer" class="ona-svg-cont"></div>
 
+                <!-- Tooltip -->
                 <div class={tipClass} lwc:ref="graphTooltip">
                     <div class="ona-tn">{tip.name}</div>
                     <div class="ona-tr">{tip.role}</div>
@@ -150,8 +211,10 @@
                     <div class="ona-tsc">
                         <div class="ona-tsi"><span class="ona-tsv">{tip.inf}</span><span class="ona-tsl">Influence</span></div>
                         <div class="ona-tsi"><span class="ona-tsv">{tip.cen}</span><span class="ona-tsl">Centrality</span></div>
+                        <div class="ona-tsi"><span class="ona-tsv">{tip.btw}</span><span class="ona-tsl">Betweenness</span></div>
                         <div class="ona-tsi"><span class="ona-tsv">{tip.con}</span><span class="ona-tsl">Connections</span></div>
                     </div>
+                    <div class="ona-tv" style={tip.velStyle}>{tip.velArrow} {tip.velLabel}</div>
                 </div>
 
                 <div class="ona-zctrls">
@@ -159,99 +222,161 @@
                     <button class="ona-zbtn" onclick={handleZoomOut}>−</button>
                     <button class="ona-zbtn" onclick={handleZoomReset}>↺</button>
                 </div>
-                <div class="ona-ghint">Click a node to see connections · Click canvas to reset</div>
+                <div class="ona-ghint">Click a node to explore · Click canvas to reset</div>
             </div>
 
             <!-- Right insight panel -->
             <div class={panelClass}>
+                <div class="ona-rpanel-inner">
 
-                <!-- Fixed header — never scrolls -->
-                <div class="ona-iph">
-                    <div class="ona-ipav" style={avStyle}>{contact.initials}</div>
-                    <div style="flex:1;min-width:0">
-                        <div class="ona-ipname">{contact.name}</div>
-                        <div class="ona-iprole">{contact.title}</div>
-                        <div class="ona-ipacct">{contact.accountName}</div>
-                        <div class="ona-ipdept">{contact.department}</div>
-                        <div class="ona-ipbadge" style={badgeStyle}>{contact.networkRole}</div>
-                    </div>
-                    <button class="ona-xbtn" onclick={closePanel}>✕</button>
-                </div>
-
-                <!-- Everything below the header scrolls -->
-                <div class="ona-rpanel-scroll">
-
-                <div class="ona-ips">
-                    <span class="ona-ipst">ONA scores</span>
-                    <div class="ona-sgrid">
-                        <div class="ona-sc"><div class="ona-scv">{contact.influenceScore}</div><div class="ona-scl">Influence</div><div class="ona-sbar"><div class="ona-sfill" style={infBarStyle}></div></div><div class="ona-scd">{contact.influenceDesc}</div></div>
-                        <div class="ona-sc"><div class="ona-scv">{contact.centralityScore}</div><div class="ona-scl">Centrality</div><div class="ona-sbar"><div class="ona-sfill" style={cenBarStyle}></div></div><div class="ona-scd">{contact.centralityDesc}</div></div>
-                        <div class="ona-sc"><div class="ona-scv">{contact.interactionScore}</div><div class="ona-scl">Interaction</div><div class="ona-sbar"><div class="ona-sfill" style={intBarStyle}></div></div><div class="ona-scd">{contact.interactionDesc}</div></div>
-                        <div class="ona-sc"><div class="ona-scv">{contact.connectionCount}</div><div class="ona-scl">Connections</div><div class="ona-sbar"><div class="ona-sfill" style={conBarStyle}></div></div><div class="ona-scd">{contact.connectionsDesc}</div></div>
-                    </div>
-                </div>
-
-                <div class="ona-ips">
-                    <span class="ona-ipst">Activity summary (12 months)</span>
-                    <div class="ona-apills">
-                        <div class="ona-ap"><div class="ona-apv">{contact.emailCount}</div><div class="ona-apl">Emails</div></div>
-                        <div class="ona-ap"><div class="ona-apv">{contact.meetingCount}</div><div class="ona-apl">Meetings</div></div>
-                        <div class="ona-ap"><div class="ona-apv">{contact.taskCount}</div><div class="ona-apl">Tasks</div></div>
-                    </div>
-                    <div class="ona-lastact">{contact.lastAct}</div>
-                </div>
-
-                <div class="ona-ips">
-                    <span class="ona-ipst">Recent activity</span>
-                    <template if:true={loadingInsight}>
-                        <div class="ona-ipempty">Loading...</div>
-                    </template>
-                    <template for:each={timeline} for:item="act">
-                        <div key={act.id} class="ona-tlitem">
-                            <div class="ona-tldot" style={act.dotStyle}></div>
-                            <div>
-                                <div class="ona-tltext">{act.subject}</div>
-                                <div class="ona-tldate">{act.activityDate}</div>
-                                <span class="ona-tlbadge" style={act.badgeStyle}>{act.activityType}</span>
-                            </div>
+                    <!-- Fixed header -->
+                    <div class="ona-iph">
+                        <div class="ona-ipav" style={avStyle}>{contact.initials}</div>
+                        <div style="flex:1;min-width:0">
+                            <div class="ona-ipname">{contact.name}</div>
+                            <div class="ona-iprole">{contact.title}</div>
+                            <div class="ona-ipacct">{contact.accountName}</div>
+                            <div class="ona-ipdept">{contact.department}</div>
+                            <div class="ona-ipbadge" style={badgeStyle}>{contact.networkRole}</div>
                         </div>
-                    </template>
-                    <template if:false={hasTimeline}>
-                        <template if:false={loadingInsight}>
-                            <div class="ona-ipempty">No recent activity logged.</div>
-                        </template>
-                    </template>
-                </div>
+                        <button class="ona-xbtn" onclick={closePanel}>✕</button>
+                    </div>
 
-                <div class="ona-ips ona-ipslast">
-                    <span class="ona-ipst">Recommended next engagements</span>
-                    <template for:each={recos} for:item="reco">
-                        <div key={reco.candidate.contactId} class="ona-rcard"
-                             data-id={reco.candidate.contactId} onclick={handleRecoClick}>
-                            <div class="ona-rtop">
-                                <div class="ona-rav" style={reco.avStyle}>{reco.candidate.initials}</div>
-                                <div>
-                                    <div class="ona-rname">{reco.candidate.name}</div>
-                                    <div class="ona-rrole">{reco.candidate.title}</div>
+                    <!-- Scrollable body -->
+                    <div class="ona-rpanel-scroll">
+
+                        <!-- ONA scores — 4 cards including 2 new ones -->
+                        <div class="ona-ips">
+                            <span class="ona-ipst">ONA scores</span>
+                            <div class="ona-sgrid">
+                                <div class="ona-sc">
+                                    <div class="ona-scv">{contact.influenceScore}</div>
+                                    <div class="ona-scl">Influence</div>
+                                    <div class="ona-sbar"><div class="ona-sfill" style={infBarStyle}></div></div>
+                                    <div class="ona-scd">{contact.influenceDesc}</div>
                                 </div>
-                                <span class="ona-rbadge" style={reco.badgeStyle}>{reco.priority}</span>
+                                <div class="ona-sc">
+                                    <div class="ona-scv">{contact.centralityScore}</div>
+                                    <div class="ona-scl">Centrality</div>
+                                    <div class="ona-sbar"><div class="ona-sfill" style={cenBarStyle}></div></div>
+                                    <div class="ona-scd">{contact.centralityDesc}</div>
+                                </div>
+                                <div class="ona-sc ona-sc-new-green">
+                                    <div class="ona-scv">{contact.decayScore}</div>
+                                    <div class="ona-scl">Decay score <span class="ona-score-badge ona-score-badge-green">New</span></div>
+                                    <div class="ona-sbar"><div class="ona-sfill" style={decBarStyle}></div></div>
+                                    <div class="ona-scd">{contact.decayDesc}</div>
+                                </div>
+                                <div class="ona-sc ona-sc-new-purple">
+                                    <div class="ona-scv">{contact.betweennessScore}</div>
+                                    <div class="ona-scl">Betweenness <span class="ona-score-badge ona-score-badge-purple">New</span></div>
+                                    <div class="ona-sbar"><div class="ona-sfill" style={betwBarStyle}></div></div>
+                                    <div class="ona-scd">{contact.betweennessDesc}</div>
+                                </div>
                             </div>
-                            <div class="ona-rwhy">{reco.reason}</div>
                         </div>
-                    </template>
-                    <template if:false={hasRecos}>
-                        <template if:false={loadingInsight}>
-                            <div class="ona-ipempty">All contacts already connected.</div>
-                        </template>
-                    </template>
-                </div>
 
-                </div><!-- /ona-rpanel-scroll -->
+                        <!-- Velocity trend — NEW -->
+                        <div class="ona-ips">
+                            <span class="ona-ipst">Velocity trend <span class="ona-lpt-badge">New</span></span>
+                            <div class="ona-vel-row">
+                                <span class="ona-vel-big" style={velBigStyle}>{contact.velocityArrow}</span>
+                                <div>
+                                    <div class="ona-vel-label" style={velLabelStyle}>{contact.velocityLabel}</div>
+                                    <div class="ona-vel-sub">Last 90 days vs prior 90 days</div>
+                                </div>
+                            </div>
+                            <div class="ona-vel-desc">{contact.velocityDesc}</div>
+                        </div>
+
+                        <!-- Warm intro paths — NEW -->
+                        <div class="ona-ips">
+                            <span class="ona-ipst">Warm intro paths <span class="ona-lpt-badge">New</span></span>
+                            <template if:true={hasIntroPaths}>
+                                <template for:each={introPaths} for:item="path">
+                                    <div key={path.targetContactId} class="ona-path-box">
+                                        <div class="ona-path-title">Route to {path.targetName}</div>
+                                        <div class="ona-path-steps">
+                                            <template for:each={path.steps} for:item="step">
+                                                <span key={step.nodeKey} class={step.nodeClass}>{step.name}</span>
+                                                <template if:false={step.isTarget}>
+                                                    <span key={step.arrowKey} class="ona-path-arrow">→</span>
+                                                </template>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </template>
+                            <template if:false={hasIntroPaths}>
+                                <div class="ona-ipempty">All nearby contacts are already connected.</div>
+                            </template>
+                        </div>
+
+                        <!-- Activity summary -->
+                        <div class="ona-ips">
+                            <span class="ona-ipst">Activity summary (12 months)</span>
+                            <div class="ona-apills">
+                                <div class="ona-ap"><div class="ona-apv">{contact.emailCount}</div><div class="ona-apl">Emails</div></div>
+                                <div class="ona-ap"><div class="ona-apv">{contact.meetingCount}</div><div class="ona-apl">Meetings</div></div>
+                                <div class="ona-ap"><div class="ona-apv">{contact.taskCount}</div><div class="ona-apl">Tasks</div></div>
+                            </div>
+                            <div class="ona-lastact">{contact.lastAct}</div>
+                        </div>
+
+                        <!-- Recent activity -->
+                        <div class="ona-ips">
+                            <span class="ona-ipst">Recent activity</span>
+                            <template if:true={loadingInsight}>
+                                <div class="ona-ipempty">Loading…</div>
+                            </template>
+                            <template for:each={timeline} for:item="act">
+                                <div key={act.id} class="ona-tlitem">
+                                    <div class="ona-tldot" style={act.dotStyle}></div>
+                                    <div>
+                                        <div class="ona-tltext">{act.subject}</div>
+                                        <div class="ona-tldate">{act.activityDate}</div>
+                                        <span class="ona-tlbadge" style={act.badgeStyle}>{act.activityType}</span>
+                                    </div>
+                                </div>
+                            </template>
+                            <template if:false={hasTimeline}>
+                                <template if:false={loadingInsight}>
+                                    <div class="ona-ipempty">No recent activity logged.</div>
+                                </template>
+                            </template>
+                        </div>
+
+                        <!-- Recommendations -->
+                        <div class="ona-ips ona-ipslast">
+                            <span class="ona-ipst">Recommended next engagements</span>
+                            <template for:each={recos} for:item="reco">
+                                <div key={reco.candidate.contactId} class="ona-rcard"
+                                     data-id={reco.candidate.contactId} onclick={handleRecoClick}>
+                                    <div class="ona-rtop">
+                                        <div class="ona-rav" style={reco.avStyle}>{reco.candidate.initials}</div>
+                                        <div>
+                                            <div class="ona-rname">{reco.candidate.name}</div>
+                                            <div class="ona-rrole">{reco.candidate.title}</div>
+                                        </div>
+                                        <span class="ona-rbadge" style={reco.badgeStyle}>{reco.priority}</span>
+                                    </div>
+                                    <div class="ona-rwhy">{reco.reason}</div>
+                                </div>
+                            </template>
+                            <template if:false={hasRecos}>
+                                <template if:false={loadingInsight}>
+                                    <div class="ona-ipempty">All contacts already connected.</div>
+                                </template>
+                            </template>
+                        </div>
+
+                    </div><!-- /ona-rpanel-scroll -->
+                </div><!-- /ona-rpanel-inner -->
             </div>
 
         </div>
 
-        <!-- ── Guided Tour Overlay ───────────────────────────────── -->
+        <!-- Guided Tour Overlay -->
         <template if:true={guideOpen}>
             <div class="ona-guide-overlay" onclick={handleGuideOverlayClick}>
                 <div class="ona-spotlight" style={spotlightStyle}></div>
@@ -260,10 +385,13 @@
                         <span class="ona-gc-step">{guideStepLabel}</span>
                         <button class="ona-gc-close" onclick={closeGuide}>✕</button>
                     </div>
-                    <div class="ona-gc-title">{currentGuideStep.title}</div>
-                    <div class="ona-gc-body">{currentGuideStep.body}</div>
-                    <template if:true={currentGuideStep.tip}>
-                        <div class="ona-gc-tip">{currentGuideStep.tip}</div>
+                    <div class="ona-gc-title">{currentStep.title}</div>
+                    <div class="ona-gc-body">{currentStep.body}</div>
+                    <template if:true={currentStep.tip}>
+                        <div class="ona-gc-tip">{currentStep.tip}</div>
+                    </template>
+                    <template if:true={currentStep.isNew}>
+                        <div class="ona-gc-new">{currentStep.isNew}</div>
                     </template>
                     <div class="ona-gc-nav">
                         <button class="ona-gc-prev" onclick={guidePrev} disabled={isFirstStep}>← Back</button>

@@ -1,5 +1,5 @@
-/* ONA Relationship Intelligence — Component Styles
-   Light mode is DEFAULT. Dark mode via .ona-app.dark on root div.
+/* ONA Relationship Intelligence — Phase 2 Styles
+   Light mode DEFAULT. Dark mode via .ona-app.dark on root div.
 */
 
 :host {
@@ -13,295 +13,293 @@
 
 /* ── Light mode (default) ────────────────────────────────────── */
 .ona-app {
-    --bg:     #f8fafc; --s1: #ffffff; --s2: #f1f5f9; --s3: #e2e8f0;
-    --b1:     rgba(0,0,0,.08); --b2: rgba(0,0,0,.14); --b3: rgba(0,0,0,.22);
-    --t1:     #0f172a; --t2: #475569; --t3: #94a3b8;
-    --gold:   #b45309; --sky: #0369a1;
-    --hub:    #b45309; --conn: #0369a1; --bridge: #4338ca; --low: #94a3b8;
-    display: flex; flex-direction: column;
-    height: 100%; width: 100%;
-    background: var(--bg); color: var(--t1);
-    overflow: hidden; transition: background .3s, color .3s;
+    --bg:  #f8fafc; --s1: #ffffff; --s2: #f1f5f9; --s3: #e2e8f0;
+    --b1:  rgba(0,0,0,.08); --b2: rgba(0,0,0,.14); --b3: rgba(0,0,0,.22);
+    --t1:  #0f172a; --t2: #475569; --t3: #94a3b8;
+    --gold:#b45309; --sky:#0369a1;
+    --hub: #b45309; --conn:#0369a1; --bridge:#4338ca; --low:#94a3b8;
+    --up:  #059669; --dn:#dc2626; --flat:#94a3b8;
+    display:flex; flex-direction:column; height:100%; width:100%;
+    background:var(--bg); color:var(--t1); overflow:hidden; transition:background .3s,color .3s;
 }
 
-/* ── Dark mode override ──────────────────────────────────────── */
+/* ── Dark mode ───────────────────────────────────────────────── */
 .ona-app.dark {
-    --bg:     #07090f; --s1: #0d111c; --s2: #131929; --s3: #1e2840;
-    --b1:     rgba(255,255,255,.07); --b2: rgba(255,255,255,.13); --b3: rgba(255,255,255,.22);
-    --t1:     #f0f4ff; --t2: #94a3b8; --t3: #4a5568;
-    --gold:   #f0b429; --sky: #38bdf8;
-    --hub:    #f0b429; --conn: #38bdf8; --bridge: #818cf8; --low: #64748b;
+    --bg:  #07090f; --s1:#0d111c; --s2:#131929; --s3:#1e2840;
+    --b1:  rgba(255,255,255,.07); --b2:rgba(255,255,255,.13); --b3:rgba(255,255,255,.22);
+    --t1:  #f0f4ff; --t2:#94a3b8; --t3:#4a5568;
+    --gold:#f0b429; --sky:#38bdf8;
+    --hub: #f0b429; --conn:#38bdf8; --bridge:#818cf8; --low:#64748b;
+    --up:  #34d399; --dn:#fb7185; --flat:#64748b;
 }
 
 /* ── Header ─────────────────────────────────────────────────── */
 .ona-hdr {
-    height: 50px; background: var(--s1); border-bottom: 1px solid var(--b1);
-    display: flex; align-items: center; padding: 0 16px; gap: 10px; flex-shrink: 0;
+    height:50px; background:var(--s1); border-bottom:1px solid var(--b1);
+    display:flex; align-items:center; padding:0 14px; gap:10px; flex-shrink:0;
 }
 .ona-logo {
-    font-size: 11px; font-weight: 600; letter-spacing: .12em;
-    text-transform: uppercase; color: var(--gold);
-    border: 1px solid var(--b2); border-radius: 3px; padding: 3px 8px;
+    font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--gold); border:1px solid var(--b2); border-radius:3px; padding:3px 8px;
 }
-.ona-sep     { width: 1px; height: 18px; background: var(--b2); }
-.ona-appname { font-size: 13px; font-weight: 500; color: var(--t1); }
-
-.ona-search-wrap { flex: 1; max-width: 340px; position: relative; }
+.ona-sep      { width:1px; height:18px; background:var(--b2); }
+.ona-appname  { font-size:13px; font-weight:500; color:var(--t1); }
+.ona-badge-new{ font-size:9px; font-weight:600; background:#dbeafe; color:#1e40af; padding:2px 6px; border-radius:10px; letter-spacing:.05em; text-transform:uppercase; }
+.ona-search-wrap { flex:1; max-width:300px; position:relative; }
 .ona-search {
-    width: 100%; background: var(--s2); border: 1px solid var(--b2);
-    border-radius: 5px; color: var(--t1); font-size: 12px;
-    font-family: inherit; padding: 6px 12px; outline: none;
+    width:100%; background:var(--s2); border:1px solid var(--b2); border-radius:5px;
+    color:var(--t1); font-size:12px; font-family:inherit; padding:6px 12px; outline:none;
 }
-.ona-search:focus        { border-color: var(--sky); }
-.ona-search::placeholder { color: var(--t3); }
-
+.ona-search:focus        { border-color:var(--sky); }
+.ona-search::placeholder { color:var(--t3); }
 .ona-dropdown {
-    position: absolute; top: calc(100% + 3px); left: 0; right: 0;
-    background: var(--s1); border: 1px solid var(--b2); border-radius: 6px;
-    z-index: 200; max-height: 200px; overflow-y: auto;
-    box-shadow: 0 6px 20px rgba(0,0,0,.12);
+    position:absolute; top:calc(100% + 3px); left:0; right:0;
+    background:var(--s1); border:1px solid var(--b2); border-radius:6px;
+    z-index:200; max-height:200px; overflow-y:auto;
+    box-shadow:0 6px 20px rgba(0,0,0,.12);
 }
-.ona-ditem {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 12px; cursor: pointer;
-}
-.ona-ditem:hover { background: var(--s2); }
-.ona-dname     { font-size: 12px; color: var(--t1); font-weight: 500; }
-.ona-dindustry { font-size: 10px; color: var(--t3); }
-
-.ona-hdr-right { display: flex; align-items: center; gap: 7px; margin-left: auto; }
-.ona-vtog { display: flex; gap: 2px; background: var(--s2); border: 1px solid var(--b2); border-radius: 6px; padding: 2px; }
+.ona-ditem { display:flex; align-items:center; justify-content:space-between; padding:8px 12px; cursor:pointer; }
+.ona-ditem:hover { background:var(--s2); }
+.ona-dname     { font-size:12px; color:var(--t1); font-weight:500; }
+.ona-dindustry { font-size:10px; color:var(--t3); }
+.ona-hdr-right { display:flex; align-items:center; gap:6px; margin-left:auto; }
+.ona-vtog { display:flex; gap:2px; background:var(--s2); border:1px solid var(--b2); border-radius:6px; padding:2px; }
 .ona-vbtn {
-    padding: 4px 12px; font-size: 11px; font-weight: 500; font-family: inherit;
-    border: none; border-radius: 4px; cursor: pointer; background: transparent;
-    color: var(--t3); transition: all .12s; text-transform: uppercase; letter-spacing: .04em;
+    padding:4px 11px; font-size:11px; font-weight:500; font-family:inherit;
+    border:none; border-radius:4px; cursor:pointer; background:transparent;
+    color:var(--t3); transition:all .12s; text-transform:uppercase; letter-spacing:.04em;
 }
-.ona-vbtn.on { background: var(--gold); color: #fff; }
+.ona-vbtn.on { background:var(--gold); color:#fff; }
 .ona-theme-btn {
-    width: 30px; height: 30px; border: 1px solid var(--b2); border-radius: 5px;
-    background: var(--s2); color: var(--t2); cursor: pointer; font-size: 14px;
-    display: flex; align-items: center; justify-content: center;
-    transition: all .12s; font-family: inherit;
+    width:28px; height:28px; border:1px solid var(--b2); border-radius:5px;
+    background:var(--s2); color:var(--t2); cursor:pointer; font-size:14px;
+    display:flex; align-items:center; justify-content:center; transition:all .12s; font-family:inherit;
 }
-.ona-theme-btn:hover { background: var(--s3); color: var(--t1); }
+.ona-theme-btn:hover { background:var(--s3); color:var(--t1); }
+.ona-guide-btn {
+    padding:4px 10px; font-size:11px; font-weight:600; font-family:inherit;
+    letter-spacing:.04em; border:1px solid var(--gold); border-radius:5px;
+    background:transparent; color:var(--gold); cursor:pointer; transition:all .12s;
+}
+.ona-guide-btn:hover { background:var(--gold); color:#fff; }
 .ona-sel {
-    background: var(--s2); border: 1px solid var(--b2); border-radius: 5px;
-    color: var(--t2); font-size: 11px; font-family: inherit; padding: 4px 7px; cursor: pointer;
+    background:var(--s2); border:1px solid var(--b2); border-radius:5px;
+    color:var(--t2); font-size:11px; font-family:inherit; padding:4px 7px; cursor:pointer;
 }
 .ona-hbtn {
-    padding: 5px 10px; font-size: 11px; font-family: inherit;
-    border: 1px solid var(--b2); border-radius: 5px; background: transparent;
-    color: var(--t2); cursor: pointer; transition: all .12s;
+    padding:4px 9px; font-size:11px; font-family:inherit;
+    border:1px solid var(--b2); border-radius:5px; background:transparent;
+    color:var(--t2); cursor:pointer; transition:all .12s;
 }
-.ona-hbtn:hover { background: var(--s2); color: var(--t1); }
+.ona-hbtn:hover { background:var(--s2); color:var(--t1); }
 
 /* ── Body ────────────────────────────────────────────────────── */
-.ona-body { display: flex; flex: 1; overflow: hidden; height: calc(100% - 50px); min-height: 0; align-items: stretch; }
+.ona-body { display:flex; flex:1; overflow:hidden; height:calc(100% - 50px); min-height:0; }
 
 /* ── Left panel ──────────────────────────────────────────────── */
 .ona-lpanel {
-    width: 210px; background: var(--s1);
-    border-right: 1px solid var(--b1); overflow-y: auto; flex-shrink: 0;
+    width:224px; background:var(--s1); border-right:1px solid var(--b1);
+    overflow-y:auto; flex-shrink:0;
 }
-.ona-lps  { padding: 13px; border-bottom: 1px solid var(--b1); }
-.ona-lpt  { font-size: 9px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--t3); display: block; margin-bottom: 10px; }
-.ona-kgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-.ona-kpi   { background: var(--s2); border: 1px solid var(--b1); border-radius: 5px; padding: 8px 9px; }
-.ona-kval  { font-size: 20px; font-weight: 600; color: var(--t1); }
-.ona-klbl  { font-size: 10px; color: var(--t3); margin-top: 1px; }
+.ona-lps  { padding:12px; border-bottom:1px solid var(--b1); }
+.ona-lpt  { font-size:9px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--t3); display:flex; align-items:center; gap:5px; margin-bottom:9px; }
+.ona-lpt-badge { font-size:8px; font-weight:600; background:#dbeafe; color:#1e40af; padding:1px 5px; border-radius:8px; letter-spacing:.04em; }
+.ona-kgrid { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+.ona-kpi   { background:var(--s2); border:1px solid var(--b1); border-radius:5px; padding:8px 9px; }
+.ona-kval  { font-size:19px; font-weight:600; color:var(--t1); }
+.ona-klbl  { font-size:10px; color:var(--t3); margin-top:1px; }
+
+/* ── Account Intelligence (Phase 2 new section) ──────────────── */
+.ona-ai-metric { background:var(--s2); border:1px solid var(--b1); border-radius:5px; padding:8px 10px; margin-bottom:6px; }
+.ona-ai-label  { display:flex; align-items:center; justify-content:space-between; font-size:10px; color:var(--t3); margin-bottom:3px; }
+.ona-ai-val    { font-size:18px; font-weight:600; color:var(--t1); }
+.ona-ai-badge  { font-size:9px; font-weight:600; padding:1px 7px; border-radius:10px; text-transform:uppercase; letter-spacing:.04em; }
+.ona-ai-desc   { font-size:10px; color:var(--t3); margin-top:4px; }
+.ona-ws-title  { font-size:10px; font-weight:500; color:var(--t3); text-transform:uppercase; letter-spacing:.08em; margin-bottom:5px; }
+.ona-ws-item   { display:flex; align-items:center; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--b1); }
+.ona-ws-item:last-child { border-bottom:none; }
+.ona-ws-dept   { font-size:11px; color:var(--t2); }
+.ona-ws-status { font-size:9px; font-weight:600; padding:1px 6px; border-radius:8px; }
+
 .ona-iq {
-    background: var(--s2); border-left: 2px solid var(--b2);
-    border-radius: 0 4px 4px 0; padding: 8px 10px; margin-bottom: 5px;
-    font-size: 11px; color: var(--t2); line-height: 1.5; cursor: pointer; transition: all .12s;
+    background:var(--s2); border-left:2px solid var(--b2); border-radius:0 4px 4px 0;
+    padding:7px 10px; margin-bottom:5px; font-size:11px; color:var(--t2);
+    line-height:1.5; cursor:pointer; transition:all .12s;
 }
-.ona-iq:hover, .ona-iq.on { border-color: var(--gold); background: rgba(180,83,9,.08); color: var(--t1); }
-.ona-iqn { font-size: 9px; color: var(--t3); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 3px; }
-.ona-legrow { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; font-size: 11px; color: var(--t2); }
-.ona-legdot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-.ona-conn-item  { display: flex; align-items: center; gap: 6px; padding: 5px 0; border-bottom: 1px solid var(--b1); }
-.ona-conn-item:last-child { border-bottom: none; }
-.ona-conn-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.ona-conn-name { color: var(--t1); font-weight: 500; flex: 1; font-size: 11px; }
-.ona-conn-str  { font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 500; }
+.ona-iq:hover,.ona-iq.on { border-color:var(--gold); background:rgba(180,83,9,.08); color:var(--t1); }
+.ona-iqn { font-size:9px; color:var(--t3); letter-spacing:.06em; text-transform:uppercase; margin-bottom:2px; }
+.ona-legrow { display:flex; align-items:center; gap:7px; margin-bottom:7px; font-size:11px; color:var(--t2); }
+.ona-legdot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.ona-vel-arrow { font-size:15px; font-weight:700; flex-shrink:0; }
+.ona-conn-item  { display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid var(--b1); }
+.ona-conn-item:last-child { border-bottom:none; }
+.ona-conn-dot  { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+.ona-conn-name { color:var(--t1); font-weight:500; flex:1; font-size:11px; }
+.ona-conn-str  { font-size:9px; padding:1px 5px; border-radius:3px; font-weight:500; }
 
 /* ── Graph canvas ────────────────────────────────────────────── */
-.ona-garea    { flex: 1; position: relative; overflow: hidden; background: var(--bg); height: 100%; }
-.ona-svg-cont { width: 100%; height: 100%; }
-
-/* ── States ─────────────────────────────────────────────────── */
+.ona-garea    { flex:1; position:relative; overflow:hidden; background:var(--bg); min-height:0; }
+.ona-svg-cont { width:100%; height:100%; }
 .ona-state {
-    position: absolute; inset: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 12px; z-index: 10;
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:12px; z-index:10;
 }
 .ona-spinner {
-    width: 30px; height: 30px; border: 2px solid var(--b2);
-    border-top-color: var(--sky); border-radius: 50%;
-    animation: ona-spin .8s linear infinite;
+    width:28px; height:28px; border:2px solid var(--b2);
+    border-top-color:var(--sky); border-radius:50%;
+    animation:ona-spin .8s linear infinite;
 }
-@keyframes ona-spin { to { transform: rotate(360deg); } }
-.ona-state-ico   { font-size: 30px; color: var(--t3); }
-.ona-state-title { font-size: 14px; font-weight: 500; color: var(--t2); }
-.ona-state-sub   { font-size: 12px; color: var(--t3); text-align: center; max-width: 260px; line-height: 1.6; }
-
-/* ── Tooltip ─────────────────────────────────────────────────── */
+@keyframes ona-spin { to { transform:rotate(360deg); } }
+.ona-state-ico   { font-size:28px; color:var(--t3); }
+.ona-state-title { font-size:14px; font-weight:500; color:var(--t2); }
+.ona-state-sub   { font-size:12px; color:var(--t3); text-align:center; max-width:260px; line-height:1.6; }
 .ona-tip {
-    position: absolute; pointer-events: none; background: var(--s1);
-    border: 1px solid var(--b3); border-radius: 7px; padding: 9px 12px;
-    font-size: 12px; opacity: 0; transition: opacity .1s; max-width: 210px;
-    z-index: 50; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    position:absolute; pointer-events:none; background:var(--s1);
+    border:1px solid var(--b3); border-radius:7px; padding:9px 12px; font-size:12px;
+    opacity:0; transition:opacity .1s; max-width:220px;
+    z-index:50; box-shadow:0 4px 16px rgba(0,0,0,.12);
 }
-.ona-tip.v { opacity: 1; }
-.ona-tn { font-weight: 500; color: var(--t1); margin-bottom: 2px; }
-.ona-tr { color: var(--t2); font-size: 11px; }
-.ona-ta { color: var(--sky); font-size: 10px; margin-top: 3px; }
-.ona-tsc { display: flex; gap: 12px; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--b1); font-size: 10px; }
-.ona-tsi { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.ona-tsv { font-size: 13px; font-weight: 600; color: var(--t1); }
-.ona-tsl { color: var(--t3); }
-
-/* ── Zoom controls ───────────────────────────────────────────── */
-.ona-zctrls { position: absolute; bottom: 16px; left: 14px; display: flex; flex-direction: column; gap: 3px; }
+.ona-tip.v { opacity:1; }
+.ona-tn { font-weight:500; color:var(--t1); margin-bottom:2px; }
+.ona-tr { color:var(--t2); font-size:11px; }
+.ona-ta { color:var(--sky); font-size:10px; margin-top:3px; }
+.ona-tsc { display:flex; gap:10px; margin-top:7px; padding-top:7px; border-top:1px solid var(--b1); font-size:10px; }
+.ona-tsi { display:flex; flex-direction:column; align-items:center; gap:1px; }
+.ona-tsv { font-size:12px; font-weight:600; color:var(--t1); }
+.ona-tsl { color:var(--t3); }
+.ona-tv  { font-size:11px; font-weight:500; padding:2px 8px; border-radius:10px; text-align:center; margin-top:6px; }
+.ona-zctrls { position:absolute; bottom:16px; left:14px; display:flex; flex-direction:column; gap:3px; }
 .ona-zbtn {
-    width: 28px; height: 28px; background: var(--s1); border: 1px solid var(--b2);
-    border-radius: 4px; color: var(--t2); font-size: 14px; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: all .12s; font-family: inherit;
+    width:28px; height:28px; background:var(--s1); border:1px solid var(--b2);
+    border-radius:4px; color:var(--t2); font-size:14px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; transition:all .12s; font-family:inherit;
 }
-.ona-zbtn:hover { background: var(--s2); color: var(--t1); }
-.ona-ghint { position: absolute; bottom: 16px; right: 16px; font-size: 10px; color: var(--t3); }
+.ona-zbtn:hover { background:var(--s2); color:var(--t1); }
+.ona-ghint { position:absolute; bottom:16px; right:16px; font-size:10px; color:var(--t3); }
 
 /* ── Right insight panel ─────────────────────────────────────── */
-/* ── Right insight panel ─────────────────────────────────────── */
-/* Pattern: panel is a flex column. Header is flex-shrink:0.
-   Scroll area is flex:1 + min-height:0 + overflow-y:auto.
-   min-height:0 is critical — without it flex children cannot shrink
-   below their content size so overflow never triggers. */
 .ona-rpanel {
-    width: 350px;
-    height: 100%;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    background: var(--s1);
-    border-left: 1px solid var(--b1);
-    overflow: hidden;
-    transition: transform .25s cubic-bezier(.4,0,.2,1);
+    position:relative; width:360px; flex-shrink:0;
+    background:var(--s1); border-left:1px solid var(--b1);
+    overflow:hidden; height:100%;
+    transition:transform .25s cubic-bezier(.4,0,.2,1);
 }
-.ona-rpanel.closed { transform: translateX(350px); }
-
-/* Remove the inner wrapper — it's not needed */
-.ona-rpanel-inner { display: contents; }
-
-/* Header — pinned, never scrolls */
+.ona-rpanel.closed { transform:translateX(360px); }
+.ona-rpanel-inner {
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; overflow:hidden;
+}
 .ona-iph {
-    padding: 13px 13px 11px;
-    border-bottom: 1px solid var(--b1);
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    flex-shrink: 0;
+    padding:12px 13px 10px; border-bottom:1px solid var(--b1);
+    display:flex; align-items:flex-start; gap:10px; flex-shrink:0;
 }
-
-/* Scroll area — takes ALL remaining height, scrolls when content overflows */
+.ona-ipav { width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0; border:2px solid; }
 .ona-rpanel-scroll {
-    flex: 1 1 0;
-    min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    -webkit-overflow-scrolling: touch;
+    flex:1; min-height:0;
+    overflow-y:auto; overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
 }
-.ona-ipav { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0; border: 2px solid; }
-.ona-ipname  { font-size: 14px; font-weight: 500; color: var(--t1); }
-.ona-iprole  { font-size: 11px; color: var(--t2); margin-top: 2px; }
-.ona-ipacct  { font-size: 11px; color: var(--sky); margin-top: 2px; }
-.ona-ipdept  { font-size: 10px; color: var(--t3); margin-top: 2px; }
-.ona-ipbadge { display: inline-block; font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 3px; margin-top: 5px; letter-spacing: .04em; text-transform: uppercase; }
+.ona-ipname  { font-size:14px; font-weight:500; color:var(--t1); }
+.ona-iprole  { font-size:11px; color:var(--t2); margin-top:2px; }
+.ona-ipacct  { font-size:11px; color:var(--sky); margin-top:2px; }
+.ona-ipdept  { font-size:10px; color:var(--t3); margin-top:2px; }
+.ona-ipbadge { display:inline-block; font-size:10px; font-weight:500; padding:2px 8px; border-radius:3px; margin-top:4px; letter-spacing:.04em; text-transform:uppercase; }
 .ona-xbtn {
-    margin-left: auto; width: 22px; height: 22px; border: none; background: transparent;
-    color: var(--t3); cursor: pointer; font-size: 14px; border-radius: 3px;
-    display: flex; align-items: center; justify-content: center;
-    transition: all .12s; font-family: inherit; flex-shrink: 0;
+    margin-left:auto; width:22px; height:22px; border:none; background:transparent;
+    color:var(--t3); cursor:pointer; font-size:14px; border-radius:3px;
+    display:flex; align-items:center; justify-content:center; transition:all .12s; font-family:inherit; flex-shrink:0;
 }
-.ona-xbtn:hover { background: var(--s2); color: var(--t1); }
-.ona-ips      { padding: 12px 13px; border-bottom: 1px solid var(--b1); }
-.ona-ipslast  { border-bottom: none; }
-.ona-ipst     { font-size: 9px; font-weight: 600; letter-spacing: .11em; text-transform: uppercase; color: var(--t3); display: block; margin-bottom: 10px; }
-.ona-sgrid    { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-.ona-sc    { background: var(--s2); border: 1px solid var(--b1); border-radius: 5px; padding: 9px 10px; }
-.ona-scv   { font-size: 20px; font-weight: 600; color: var(--t1); }
-.ona-scl   { font-size: 10px; color: var(--t3); margin-top: 2px; }
-.ona-sbar  { height: 3px; background: var(--s3); border-radius: 2px; margin-top: 7px; }
-.ona-sfill { height: 100%; border-radius: 2px; transition: width .7s; }
-.ona-scd   { font-size: 10px; color: var(--t2); margin-top: 5px; line-height: 1.5; }
-.ona-apills { display: flex; gap: 5px; margin-bottom: 8px; }
-.ona-ap  { flex: 1; background: var(--s2); border: 1px solid var(--b1); border-radius: 5px; padding: 7px 5px; text-align: center; }
-.ona-apv { font-size: 16px; font-weight: 600; color: var(--t1); }
-.ona-apl { font-size: 9px; color: var(--t3); margin-top: 2px; text-transform: uppercase; letter-spacing: .04em; }
-.ona-lastact { font-size: 10px; color: var(--t3); }
-.ona-tlitem  { display: flex; gap: 9px; margin-bottom: 8px; }
-.ona-tldot   { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
-.ona-tltext  { font-size: 12px; color: var(--t2); line-height: 1.45; }
-.ona-tldate  { font-size: 10px; color: var(--t3); margin-top: 1px; }
-.ona-tlbadge { display: inline-block; font-size: 9px; font-weight: 500; padding: 1px 6px; border-radius: 2px; margin-top: 3px; text-transform: uppercase; letter-spacing: .04em; }
-.ona-rcard {
-    background: var(--s2); border: 1px solid var(--b1); border-radius: 5px;
-    padding: 9px 11px; margin-bottom: 6px; cursor: pointer;
-    transition: border-color .12s, background .12s;
-}
-.ona-rcard:hover { border-color: var(--b3); background: var(--s3); }
-.ona-rtop   { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
-.ona-rav    { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; flex-shrink: 0; }
-.ona-rname  { font-size: 12px; font-weight: 500; color: var(--t1); }
-.ona-rrole  { font-size: 10px; color: var(--t2); }
-.ona-rbadge { margin-left: auto; flex-shrink: 0; font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 2px; text-transform: uppercase; letter-spacing: .04em; }
-.ona-rwhy   { font-size: 11px; color: var(--t2); line-height: 1.55; }
-.ona-ipempty { font-size: 11px; color: var(--t3); font-style: italic; }
+.ona-xbtn:hover { background:var(--s2); color:var(--t1); }
+.ona-ips     { padding:11px 13px; border-bottom:1px solid var(--b1); }
+.ona-ipslast { border-bottom:none; }
+.ona-ipst    { font-size:9px; font-weight:600; letter-spacing:.11em; text-transform:uppercase; color:var(--t3); display:flex; align-items:center; gap:5px; margin-bottom:9px; }
+.ona-sgrid   { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+.ona-sc      { background:var(--s2); border:1px solid var(--b1); border-radius:5px; padding:8px 10px; }
+.ona-sc-new-green  { border-color:#059669; }
+.ona-sc-new-purple { border-color:#4338ca; }
+.ona-scv { font-size:19px; font-weight:600; color:var(--t1); }
+.ona-scl { font-size:10px; color:var(--t3); margin-top:2px; display:flex; align-items:center; gap:4px; }
+.ona-sbar { height:3px; background:var(--s3); border-radius:2px; margin-top:6px; }
+.ona-sfill{ height:100%; border-radius:2px; transition:width .7s; }
+.ona-scd  { font-size:10px; color:var(--t2); margin-top:4px; line-height:1.5; }
 
-::-webkit-scrollbar       { width: 3px; }
-::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 2px; }
+/* Score new badges */
+.ona-score-badge        { font-size:8px; font-weight:600; padding:1px 4px; border-radius:4px; vertical-align:middle; }
+.ona-score-badge-green  { background:#dcfce7; color:#15803d; }
+.ona-score-badge-purple { background:#ede9fe; color:#4338ca; }
 
-/* ── Guide button ──────────────────────────────────── */
-.ona-guide-btn {
-    padding: 5px 11px; font-size: 11px; font-weight: 600;
-    font-family: inherit; letter-spacing: .04em;
-    border: 1px solid var(--gold); border-radius: 5px;
-    background: transparent; color: var(--gold);
-    cursor: pointer; transition: all .13s;
-}
-.ona-guide-btn:hover { background: var(--gold); color: #fff; }
+/* ── Velocity section (Phase 2 new) ──────────────────────────── */
+.ona-vel-row  { display:flex; align-items:center; gap:10px; margin-bottom:7px; }
+.ona-vel-big  { font-size:24px; font-weight:700; flex-shrink:0; }
+.ona-vel-label{ font-size:13px; font-weight:500; }
+.ona-vel-sub  { font-size:10px; color:var(--t3); margin-top:2px; }
+.ona-vel-desc { font-size:11px; color:var(--t2); line-height:1.6; }
 
-/* ── Guided tour overlay ───────────────────────────── */
+/* ── Intro path boxes (Phase 2 new) ──────────────────────────── */
+.ona-path-box   { background:var(--s2); border:1px solid var(--b1); border-radius:6px; padding:9px 11px; margin-bottom:6px; }
+.ona-path-title { font-size:10px; font-weight:600; color:var(--t3); text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }
+.ona-path-steps { display:flex; align-items:center; flex-wrap:wrap; gap:4px; font-size:11px; }
+.ona-path-node  { background:var(--s1); border:1px solid var(--b2); border-radius:4px; padding:3px 8px; color:var(--t1); font-weight:500; }
+.ona-path-arrow { color:var(--t3); font-size:11px; }
+.ona-path-target{ background:#dbeafe; border:1px solid #93c5fd; border-radius:4px; padding:3px 8px; color:#1e40af; font-weight:500; }
+
+/* ── Activity summary ────────────────────────────────────────── */
+.ona-apills { display:flex; gap:5px; margin-bottom:7px; }
+.ona-ap  { flex:1; background:var(--s2); border:1px solid var(--b1); border-radius:5px; padding:6px 5px; text-align:center; }
+.ona-apv { font-size:15px; font-weight:600; color:var(--t1); }
+.ona-apl { font-size:9px; color:var(--t3); margin-top:2px; text-transform:uppercase; letter-spacing:.04em; }
+.ona-lastact { font-size:10px; color:var(--t3); }
+.ona-tlitem  { display:flex; gap:9px; margin-bottom:8px; }
+.ona-tldot   { width:7px; height:7px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+.ona-tltext  { font-size:12px; color:var(--t2); line-height:1.45; }
+.ona-tldate  { font-size:10px; color:var(--t3); margin-top:1px; }
+.ona-tlbadge { display:inline-block; font-size:9px; font-weight:500; padding:1px 5px; border-radius:2px; margin-top:3px; text-transform:uppercase; letter-spacing:.04em; }
+
+/* ── Recommendations ─────────────────────────────────────────── */
+.ona-rcard { background:var(--s2); border:1px solid var(--b1); border-radius:5px; padding:8px 11px; margin-bottom:5px; cursor:pointer; transition:border-color .12s,background .12s; }
+.ona-rcard:hover { border-color:var(--b3); background:var(--s3); }
+.ona-rtop  { display:flex; align-items:center; gap:7px; margin-bottom:4px; }
+.ona-rav   { width:25px; height:25px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:600; flex-shrink:0; }
+.ona-rname { font-size:12px; font-weight:500; color:var(--t1); }
+.ona-rrole { font-size:10px; color:var(--t2); }
+.ona-rbadge{ margin-left:auto; flex-shrink:0; font-size:9px; font-weight:600; padding:2px 6px; border-radius:2px; text-transform:uppercase; letter-spacing:.04em; }
+.ona-rwhy  { font-size:11px; color:var(--t2); line-height:1.55; }
+.ona-ipempty { font-size:11px; color:var(--t3); font-style:italic; }
+
+/* ── Guided Tour Overlay ─────────────────────────────────────── */
 .ona-guide-overlay {
-    position: absolute; inset: 0; z-index: 500;
-    background: rgba(0,0,0,.52);
+    position:absolute; inset:0; z-index:500; background:rgba(0,0,0,.52);
 }
 .ona-spotlight {
-    position: absolute; border-radius: 8px;
-    box-shadow: 0 0 0 9999px rgba(0,0,0,.52);
-    transition: all .35s cubic-bezier(.4,0,.2,1);
-    pointer-events: none;
-    outline: 2.5px solid var(--gold); outline-offset: 3px;
+    position:absolute; border-radius:8px;
+    box-shadow:0 0 0 9999px rgba(0,0,0,.52);
+    transition:all .35s cubic-bezier(.4,0,.2,1);
+    pointer-events:none;
+    outline:2.5px solid var(--gold); outline-offset:3px;
 }
 .ona-guide-card {
-    position: absolute; width: 320px;
-    background: var(--s1); border: 1px solid var(--b2);
-    border-radius: 10px; padding: 18px 18px 14px;
-    box-shadow: 0 8px 32px rgba(0,0,0,.28);
-    z-index: 10; transition: all .35s cubic-bezier(.4,0,.2,1);
+    position:absolute; width:330px;
+    background:var(--s1); border:1px solid var(--b2);
+    border-radius:10px; padding:18px 18px 14px;
+    box-shadow:0 8px 32px rgba(0,0,0,.28);
 }
-.ona-gc-top  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.ona-gc-step { font-size: 10px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); background: rgba(180,83,9,.1); padding: 2px 8px; border-radius: 10px; }
-.ona-gc-close{ border: none; background: transparent; color: var(--t3); cursor: pointer; font-size: 14px; font-family: inherit; padding: 0; line-height: 1; }
-.ona-gc-close:hover { color: var(--t1); }
-.ona-gc-title{ font-size: 15px; font-weight: 500; color: var(--t1); margin-bottom: 8px; }
-.ona-gc-body { font-size: 12px; color: var(--t2); line-height: 1.7; margin-bottom: 10px; }
-.ona-gc-tip  { font-size: 11px; color: var(--sky); background: rgba(3,105,161,.08); border-left: 2px solid var(--sky); border-radius: 0 4px 4px 0; padding: 6px 10px; margin-bottom: 12px; line-height: 1.6; }
-.ona-gc-nav  { display: flex; align-items: center; gap: 10px; }
-.ona-gc-prev { padding: 6px 14px; font-size: 12px; font-family: inherit; border: 1px solid var(--b2); border-radius: 5px; background: transparent; color: var(--t2); cursor: pointer; transition: all .12s; }
-.ona-gc-prev:disabled { opacity: .35; cursor: default; }
-.ona-gc-prev:not(:disabled):hover { background: var(--s2); color: var(--t1); }
-.ona-gc-next { margin-left: auto; padding: 6px 16px; font-size: 12px; font-weight: 500; font-family: inherit; border: none; border-radius: 5px; background: var(--gold); color: #fff; cursor: pointer; transition: all .12s; }
-.ona-gc-next:hover { opacity: .88; }
-.ona-gc-dots { display: flex; gap: 5px; flex: 1; justify-content: center; }
-.ona-gc-dot  { width: 6px; height: 6px; border-radius: 50%; background: var(--b2); transition: background .2s; }
-.ona-gc-dot.on { background: var(--gold); }
+.ona-gc-top   { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.ona-gc-step  { font-size:10px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; color:var(--gold); background:rgba(180,83,9,.1); padding:2px 8px; border-radius:10px; }
+.ona-gc-close { border:none; background:transparent; color:var(--t3); cursor:pointer; font-size:14px; font-family:inherit; padding:0; line-height:1; }
+.ona-gc-close:hover { color:var(--t1); }
+.ona-gc-title { font-size:15px; font-weight:500; color:var(--t1); margin-bottom:8px; }
+.ona-gc-body  { font-size:12px; color:var(--t2); line-height:1.7; margin-bottom:10px; }
+.ona-gc-tip   { font-size:11px; color:var(--sky); background:rgba(3,105,161,.08); border-left:2px solid var(--sky); border-radius:0 4px 4px 0; padding:6px 10px; margin-bottom:10px; line-height:1.6; }
+.ona-gc-new   { font-size:11px; color:#059669; background:rgba(5,150,105,.08); border-left:2px solid #059669; border-radius:0 4px 4px 0; padding:6px 10px; margin-bottom:10px; line-height:1.6; }
+.ona-gc-nav   { display:flex; align-items:center; gap:10px; }
+.ona-gc-prev  { padding:6px 14px; font-size:12px; font-family:inherit; border:1px solid var(--b2); border-radius:5px; background:transparent; color:var(--t2); cursor:pointer; transition:all .12s; }
+.ona-gc-prev:disabled { opacity:.35; cursor:default; }
+.ona-gc-prev:not(:disabled):hover { background:var(--s2); color:var(--t1); }
+.ona-gc-next  { margin-left:auto; padding:6px 16px; font-size:12px; font-weight:500; font-family:inherit; border:none; border-radius:5px; background:var(--gold); color:#fff; cursor:pointer; transition:all .12s; }
+.ona-gc-next:hover { opacity:.88; }
+.ona-gc-dots  { display:flex; gap:5px; flex:1; justify-content:center; }
+.ona-gc-dot   { width:6px; height:6px; border-radius:50%; background:var(--b2); transition:background .2s; }
+.ona-gc-dot.on{ background:var(--gold); }
+
+::-webkit-scrollbar       { width:3px; }
+::-webkit-scrollbar-thumb { background:var(--s3); border-radius:2px; }
