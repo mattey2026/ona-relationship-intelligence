@@ -1,0 +1,664 @@
+<template>
+    <div class={appClass}>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             SIDEBAR
+        ════════════════════════════════════════════════════════════════ -->
+        <div class="arm-sb">
+            <div class="arm-sb-head">
+                <div class="arm-sb-head-txt">
+                    <h2>{accountName}</h2>
+                    <p>{accountIndustry} · Relationship Map</p>
+                </div>
+                <button class="arm-theme-btn" onclick={handleThemeToggle}>{themeIcon}</button>
+            </div>
+
+            <div class="arm-stats">
+                <div class="arm-sc"><div class="arm-sc-n">{totalContacts}</div><div class="arm-sc-l">Contacts</div></div>
+                <div class="arm-sc"><div class="arm-sc-n">{highEngagementCount}</div><div class="arm-sc-l">High eng.</div></div>
+                <div class="arm-sc"><div class="arm-sc-n">{totalActivities}</div><div class="arm-sc-l">Activities</div></div>
+                <div class="arm-sc"><div class="arm-sc-n">{openPipelineFormatted}</div><div class="arm-sc-l">Pipeline</div></div>
+            </div>
+
+            <div class="arm-dstrip">
+                <template for:each={deptStrip} for:item="d">
+                    <span key={d.dept} style={d.style}></span>
+                </template>
+            </div>
+
+            <div class="arm-dept-filters">
+                <template for:each={deptFilters} for:item="df">
+                    <button key={df.label} class={df.btnClass}
+                        data-dept={df.label} style={df.activeStyle}
+                        onclick={handleDeptFilter}>{df.label}</button>
+                </template>
+            </div>
+
+            <div class="arm-az-bar">
+                <template for:each={azLetters} for:item="az">
+                    <button key={az.letter} class={az.btnClass}
+                        data-letter={az.letter} onclick={handleAZFilter}
+                        disabled={az.disabled}>{az.letter}</button>
+                </template>
+                <template if:true={hasActiveFilter}>
+                    <button class="arm-az-reset" onclick={handleResetFilters}>Reset</button>
+                </template>
+            </div>
+
+            <div class="arm-srch">
+                <input type="text" placeholder="Search contacts…"
+                    value={_search} oninput={handleSearch} />
+            </div>
+
+            <div class="arm-vsw">
+                <button class={listBtnClass} onclick={handleViewList}>List</button>
+                <button class={gridBtnClass} onclick={handleViewGrid}>Grid</button>
+                <button class={treeBtnClass} onclick={handleViewTree}>Tree</button>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             MAIN BODY
+        ════════════════════════════════════════════════════════════════ -->
+        <div class="arm-main">
+            <div class="arm-main-hdr">
+                <h3>{viewTitle}</h3>
+                <span class="arm-view-count">{viewCount}</span>
+                <button class="arm-btn-create" onclick={handleOpenCC}>+ Create Contact</button>
+                <button class="arm-btn-brand arm-btn-sm" onclick={handleOpenQC}>+ Quick Connect</button>
+            </div>
+
+            <div class="arm-main-body">
+                <template if:true={isLoading}>
+                    <div class="arm-loading">
+                        <lightning-spinner alternative-text="Loading…" size="medium"></lightning-spinner>
+                    </div>
+                </template>
+                <template if:true={hasError}>
+                    <div class="arm-error">{errorMessage}</div>
+                </template>
+                <template if:true={isEmpty}>
+                    <div class="arm-empty-state">
+                        <p>No contacts match</p>
+                        <span>Adjust your filters or search term.</span>
+                    </div>
+                </template>
+
+                <!-- LIST -->
+                <template if:true={isListView}>
+                    <div class="arm-list-wrap">
+                        <template for:each={listGroups} for:item="grp">
+                            <div key={grp.dept} class="arm-list-group">
+                                <div class="arm-cg-hdr">
+                                    <span class="arm-cg-dot" style={grp.dotStyle}></span>
+                                    <span class="arm-cg-title">{grp.dept}</span>
+                                </div>
+                                <template for:each={grp.rows} for:item="c">
+                                    <div key={c.Id} class={c.listRowClass}
+                                        data-id={c.Id} onclick={handleContactClick}
+                                        style={c.indentStyle}>
+                                        <div class="arm-av-wrap" style="width:24px;height:24px">
+                                            <div class="arm-av arm-av-24" style={c.avatarStyle}>{c.initials}</div>
+                                            <div class="arm-av-ring" style={c.ringStyle}></div>
+                                        </div>
+                                        <div class="arm-cr-info">
+                                            <div class="arm-cr-nm">{c.Name}</div>
+                                            <div class="arm-cr-tt">{c.titleDisplay}</div>
+                                        </div>
+                                        <div class="arm-cr-badges">
+                                            <template for:each={c.roleBadges} for:item="rb">
+                                                <span key={rb.key} class={rb.cls}>{rb.label}</span>
+                                            </template>
+                                            <template if:true={c.teamTouched}>
+                                                <span class="arm-team-dot" title="Account team active"></span>
+                                            </template>
+                                            <span class={c.pillClass}>{c.engagementLabel}</span>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- GRID -->
+                <template if:true={isGridView}>
+                    <div class="arm-grid">
+                        <template for:each={filteredContacts} for:item="c">
+                            <div key={c.Id} class={c.gridCardClass}
+                                data-id={c.Id}
+                                draggable="true"
+                                ondragstart={handleDragStart}
+                                ondragover={handleDragOver}
+                                ondragleave={handleDragLeave}
+                                ondrop={handleDrop}
+                                onclick={handleContactClick}>
+                                <div class="arm-gc-acc" style={c.accentStyle}></div>
+                                <div class="arm-gc-b">
+                                    <div class="arm-av-wrap" style="width:30px;height:30px">
+                                        <div class="arm-av arm-av-30" style={c.avatarStyle}>{c.initials}</div>
+                                        <div class="arm-av-ring" style={c.ringStyle}></div>
+                                    </div>
+                                    <div class="arm-gc-nm">{c.Name}</div>
+                                    <div class="arm-gc-tt">{c.titleDisplay}</div>
+                                    <div class="arm-gc-dp">{c.deptDisplay}</div>
+                                    <div class="arm-gc-roles">
+                                        <template for:each={c.roleBadges} for:item="rb">
+                                            <span key={rb.key} class={rb.cls}>{rb.label}</span>
+                                        </template>
+                                    </div>
+                                    <div class="arm-gc-foot">
+                                        <div style="display:flex;align-items:center;gap:4px">
+                                            <span class="arm-gc-acts">{c.totalActivities}a</span>
+                                            <template if:true={c.teamTouched}>
+                                                <span class="arm-team-dot" title="Account team active"></span>
+                                            </template>
+                                        </div>
+                                        <span class={c.pillClass}>{c.engagementLabel}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- TREE -->
+                <template if:true={isTreeView}>
+                    <div class="arm-tree-root" lwc:ref="treeContainer"></div>
+                </template>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             SIDE PANEL
+        ════════════════════════════════════════════════════════════════ -->
+        <template if:true={hasSelectedContact}>
+            <div class="arm-panel">
+
+                <div class="arm-ph">
+                    <div class="arm-ph-row">
+                        <div class="arm-av-wrap" style="width:36px;height:36px;flex-shrink:0">
+                            <div class="arm-av arm-av-36" style={selectedContact.avatarStyle}>{selectedContact.initials}</div>
+                            <div class="arm-av-ring arm-av-ring-lg" style={selectedContact.ringStyle}></div>
+                        </div>
+                        <div class="arm-ph-info">
+                            <div class="arm-ph-nm">{selectedContact.Name}</div>
+                            <div class="arm-ph-tt">{selectedContact.titleDisplay}</div>
+                            <div class="arm-ph-tags">
+                                <span class="arm-tag" style={selectedContact.deptTagStyle}>{selectedContact.deptDisplay}</span>
+                                <span class="arm-tag" style={selectedContact.statusTagStyle}>{selectedContact.statusLabel}</span>
+                            </div>
+                            <!-- Saved buyer role pills always visible in header -->
+                            <template if:true={hasRoleBadges}>
+                                <div class="arm-ph-roles">
+                                    <template for:each={selectedRoleBadges} for:item="rb">
+                                        <span key={rb.key} class={rb.cls}>{rb.label}</span>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                        <button class="arm-close-btn" onclick={handleClosePanel}>×</button>
+                    </div>
+
+                    <div class="arm-bar-row">
+                        <span class="arm-bar-lbl">Relationship</span>
+                        <div class="arm-bar-track"><div class="arm-bar-fill" style={selectedContact.relStrengthStyle}></div></div>
+                        <span class="arm-bar-val" style={selectedContact.relStrengthValStyle}>{selectedContact.relationshipStrength}%</span>
+                    </div>
+                    <div class="arm-bar-row">
+                        <span class="arm-bar-lbl">Engagement</span>
+                        <div class="arm-bar-track"><div class="arm-bar-fill" style={selectedContact.engagementStyle}></div></div>
+                        <span class="arm-bar-val" style={selectedContact.engagementValStyle}>{selectedContact.engagementScore}%</span>
+                    </div>
+
+                    <!-- TWO-ROW TABS
+                         Row 1 — Info · Team · Attributes  (equal thirds)
+                         Row 2 — Connections               (full width)   -->
+                    <div class="arm-ptab-rows">
+                        <div class="arm-ptab-row">
+                            <button class={infoTabClass}
+                                    data-tab="info"
+                                    onclick={handlePanelTab}>Info</button>
+                            <button class={teamTabClass}
+                                    data-tab="team"
+                                    onclick={handlePanelTab}>Team</button>
+                            <button class={attrsTabClass}
+                                    data-tab="attrs"
+                                    onclick={handlePanelTab}>Attributes</button>
+                        </div>
+                        <div class="arm-ptab-row">
+                            <button class={connTabClass}
+                                    data-tab="connections"
+                                    onclick={handlePanelTab}>{connTabLabel}</button>
+                        </div>
+                    </div>
+                </div><!-- end arm-ph -->
+
+                <!-- ── PANEL BODY ── -->
+                <div class="arm-pb">
+
+                    <!-- INFO TAB -->
+                    <template if:true={isInfoTab}>
+                        <div class="arm-psec">
+                            <div class="arm-psec-hdr"><span class="arm-psec-title">Contact info</span></div>
+                            <div class="arm-ir"><span class="arm-il">Email</span><a class="arm-iv arm-link" href={selectedContact.emailHref}>{selectedContact.Email}</a></div>
+                            <div class="arm-ir"><span class="arm-il">Phone</span><span class="arm-iv">{selectedContact.Phone}</span></div>
+                            <div class="arm-ir"><span class="arm-il">Reports to</span><span class="arm-iv">{selectedContact.reportsToName}</span></div>
+                            <div class="arm-ir"><span class="arm-il">Seniority</span><span class="arm-iv">{selectedContact.seniority}</span></div>
+                        </div>
+                        <div class="arm-psec">
+                            <div class="arm-psec-hdr">
+                                <span class="arm-psec-title">Activity</span>
+                                <span class="arm-psec-badge">{selectedContact.totalActivities} total</span>
+                            </div>
+                            <div class="arm-a4">
+                                <div class="arm-ac"><div class="arm-ac-n">{selectedContact.taskCount}</div><div class="arm-ac-l">Tasks</div><div class="arm-ac-b" style="background:#0176d3"></div></div>
+                                <div class="arm-ac"><div class="arm-ac-n">{selectedContact.eventCount}</div><div class="arm-ac-l">Meetings</div><div class="arm-ac-b" style="background:#534AB7"></div></div>
+                                <div class="arm-ac"><div class="arm-ac-n">{selectedContact.callCount}</div><div class="arm-ac-l">Calls</div><div class="arm-ac-b" style="background:#EF9F27"></div></div>
+                                <div class="arm-ac"><div class="arm-ac-n">{selectedContact.emailCount}</div><div class="arm-ac-l">Emails</div><div class="arm-ac-b" style="background:#888780"></div></div>
+                            </div>
+                        </div>
+                        <div class="arm-psec">
+                            <div class="arm-psec-hdr"><span class="arm-psec-title">Timeline</span></div>
+                            <template for:each={selectedContact.timeline} for:item="t">
+                                <div key={t.subject} class="arm-tl-item">
+                                    <div class="arm-tl-ico" style={t.iconStyle}>{t.iconChar}</div>
+                                    <div>
+                                        <div class="arm-tl-txt">{t.subject}</div>
+                                        <div class="arm-tl-time">{t.activityDate}</div>
+                                    </div>
+                                </div>
+                            </template>
+                            <template if:true={selectedContact.hasNoTimeline}>
+                                <div class="arm-muted">No recent activity</div>
+                            </template>
+                        </div>
+                        <div class="arm-psec">
+                            <div class="arm-psec-hdr">
+                                <span class="arm-psec-title">Open Opportunities</span>
+                                <span class="arm-psec-badge">{selectedContact.oppCount}</span>
+                            </div>
+                            <template for:each={selectedContact.opportunities} for:item="o">
+                                <div key={o.name} class="arm-opp-item">
+                                    <div class="arm-opp-bar" style={o.barStyle}></div>
+                                    <div class="arm-opp-info">
+                                        <div class="arm-opp-nm">{o.name}</div>
+                                        <div class="arm-opp-st">{o.stageName}</div>
+                                    </div>
+                                    <div class="arm-opp-r">
+                                        <div class="arm-opp-amt">{o.amountFormatted}</div>
+                                        <div class="arm-opp-pct">{o.probability}%</div>
+                                    </div>
+                                </div>
+                            </template>
+                            <template if:true={selectedContact.hasNoOpps}>
+                                <div class="arm-muted">No open opportunities</div>
+                            </template>
+                        </div>
+                        <div class="arm-psec">
+                            <div class="arm-psec-hdr">
+                                <span class="arm-psec-title">Direct Reports</span>
+                                <span class="arm-psec-badge">{selectedContact.directReportCount}</span>
+                            </div>
+                            <template for:each={selectedContact.directReports} for:item="dr">
+                                <div key={dr.Id} class="arm-dr-item"
+                                    data-id={dr.Id} onclick={handleContactClick}>
+                                    <div class="arm-av-wrap" style="width:24px;height:24px;flex-shrink:0">
+                                        <div class="arm-av arm-av-24" style={dr.avatarStyle}>{dr.initials}</div>
+                                        <div class="arm-av-ring" style={dr.ringStyle}></div>
+                                    </div>
+                                    <div class="arm-dr-info">
+                                        <div class="arm-dr-nm">{dr.Name}</div>
+                                        <div class="arm-dr-tt">{dr.titleDisplay}</div>
+                                    </div>
+                                    <span class={dr.pillClass}>{dr.engagementLabel}</span>
+                                </div>
+                            </template>
+                            <template if:true={selectedContact.hasNoDirectReports}>
+                                <div class="arm-muted">No direct reports</div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <!-- TEAM TAB -->
+                    <template if:true={isTeamTab}>
+                        <div class="arm-psec">
+                            <div class="arm-psec-hdr">
+                                <span class="arm-psec-title">Account Team</span>
+                                <span class="arm-psec-badge">{accountTeamCount}</span>
+                            </div>
+                            <template if:true={hasAccountTeam}>
+                                <template for:each={teamMembersFormatted} for:item="m">
+                                    <div key={m.userId} class="arm-tm-item">
+                                        <div class="arm-av-wrap" style="width:24px;height:24px;flex-shrink:0">
+                                            <div class="arm-av arm-av-24" style={m.avatarStyle}>{m.initials}</div>
+                                        </div>
+                                        <div class="arm-tm-info">
+                                            <div class="arm-tm-nm">{m.userName}</div>
+                                            <div class="arm-tm-role">{m.role}</div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </template>
+                            <template if:true={noAccountTeam}>
+                                <div class="arm-muted">No account team members configured for this account.</div>
+                            </template>
+                        </div>
+                        <div class="arm-psec">
+                            <div class="arm-psec-hdr">
+                                <span class="arm-psec-title">Coverage for this contact</span>
+                            </div>
+                            <template if:true={hasTeamOwner}>
+                                <div class="arm-tm-item">
+                                    <div class="arm-av-wrap" style="width:24px;height:24px;flex-shrink:0">
+                                        <div class="arm-av arm-av-24" style={selectedContactTeamOwner.avatarStyle}>{selectedContactTeamOwner.initials}</div>
+                                    </div>
+                                    <div class="arm-tm-info">
+                                        <div class="arm-tm-nm">{selectedContactTeamOwner.ownerName}</div>
+                                        <div class="arm-tm-role">{selectedContactTeamOwner.ownerRole}</div>
+                                    </div>
+                                    <span class="arm-team-badge">Last 90d</span>
+                                </div>
+                                <div class="arm-ir" style="margin-top:6px">
+                                    <span class="arm-il">Eng. boost</span>
+                                    <span class="arm-iv" style="color:#0F6E56;font-weight:700">+10 pts applied</span>
+                                </div>
+                                <p class="arm-team-note">Account team activity in the last 90 days has boosted this contact's engagement score.</p>
+                            </template>
+                            <template if:true={noTeamCoverage}>
+                                <div class="arm-muted">No account team activity on this contact in the last 90 days.</div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <!-- ATTRIBUTES TAB -->
+                    <template if:true={isAttributesTab}>
+                        <div class="arm-psec">
+                            <div class="arm-psec-hdr">
+                                <span class="arm-psec-title">Buyer Roles</span>
+                            </div>
+                            <p class="arm-team-note" style="margin-bottom:6px">Click to toggle · saved immediately to Salesforce</p>
+                            <div class="arm-role-grid">
+                                <template for:each={roleToggles} for:item="rt">
+                                    <button key={rt.key}
+                                            class={rt.btnClass}
+                                            data-role={rt.key}
+                                            data-id={selectedContact.Id}
+                                            onclick={handleRoleToggle}>{rt.label}</button>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="arm-psec">
+                            <div class="arm-psec-hdr">
+                                <span class="arm-psec-title">Profile</span>
+                            </div>
+                            <div class="arm-attr-row">
+                                <span class="arm-attr-lbl">Seniority</span>
+                                <div class="arm-attr-val">
+                                    <select data-id={selectedContact.Id}
+                                            data-key="seniority"
+                                            onchange={handleAttrChange}>
+                                        <template for:each={seniorityOptions} for:item="s">
+                                            <option key={s.value} value={s.value}
+                                                    selected={s.selected}>{s.label}</option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="arm-attr-row">
+                                <span class="arm-attr-lbl">Department</span>
+                                <div class="arm-attr-val">
+                                    <select data-id={selectedContact.Id}
+                                            data-key="Department"
+                                            onchange={handleAttrChange}>
+                                        <template for:each={deptOptions} for:item="d">
+                                            <option key={d.value} value={d.value}
+                                                    selected={d.selected}>{d.label}</option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="arm-attr-row">
+                                <span class="arm-attr-lbl">Reports to</span>
+                                <div class="arm-attr-val">
+                                    <select data-id={selectedContact.Id}
+                                            data-key="ReportsToId"
+                                            onchange={handleReportsToChange}>
+                                        <template for:each={reportsToOptions} for:item="r">
+                                            <option key={r.value} value={r.value}
+                                                    selected={r.selected}>{r.label}</option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="arm-attr-row">
+                                <span class="arm-attr-lbl">Eng. score</span>
+                                <div class="arm-attr-val">
+                                    <input type="number" min="0" max="100"
+                                        value={selectedContact.engagementScore}
+                                        data-id={selectedContact.Id}
+                                        data-key="engagementScore"
+                                        onchange={handleAttrChange}
+                                        class="arm-score-input" />
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- CONNECTIONS TAB -->
+                    <template if:true={isConnectionsTab}>
+                        <template if:true={_connLoading}>
+                            <div class="arm-conn-loading">
+                                <lightning-spinner alternative-text="Loading…" size="small"></lightning-spinner>
+                                <p>Finding connections…</p>
+                            </div>
+                        </template>
+                        <template if:true={hasConnections}>
+                            <template for:each={connectionsList} for:item="conn">
+                                <div key={conn.contactId} class="arm-conn-item"
+                                    data-id={conn.contactId} onclick={handleViewConnection}>
+                                    <div class="arm-conn-top">
+                                        <div class="arm-av-wrap" style="width:26px;height:26px;flex-shrink:0">
+                                            <div class="arm-av arm-av-26" style={conn.avatarStyle}>{conn.initials}</div>
+                                            <div class="arm-av-ring" style={conn.ringStyle}></div>
+                                        </div>
+                                        <div class="arm-conn-info">
+                                            <div class="arm-conn-nm">{conn.contactName}</div>
+                                            <div class="arm-conn-tt">{conn.titleDisplay}</div>
+                                        </div>
+                                        <span class={conn.pillClass}>{conn.engLabel}</span>
+                                    </div>
+                                    <div class="arm-conn-br">
+                                        <span class="arm-conn-br-lbl">Strength</span>
+                                        <div class="arm-conn-br-track">
+                                            <div class="arm-conn-br-fill" style={conn.strengthStyle}></div>
+                                        </div>
+                                        <span class="arm-conn-br-val" style={conn.strengthValStyle}>{conn.strengthPct}%</span>
+                                    </div>
+                                    <div class="arm-conn-tags">
+                                        <template if:true={conn.hasOpps}>
+                                            <span class="arm-ct arm-ct-opp">{conn.sharedOppsLabel}</span>
+                                        </template>
+                                        <template if:true={conn.hasActivities}>
+                                            <span class="arm-ct arm-ct-act">{conn.sharedActsLabel}</span>
+                                        </template>
+                                        <template if:true={conn.sameDepartment}>
+                                            <span class="arm-ct arm-ct-dept">Same dept</span>
+                                        </template>
+                                        <template if:true={conn.connType}>
+                                            <span class="arm-ct arm-ct-type">{conn.connType}</span>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </template>
+                        <template if:true={hasNoConnections}>
+                            <div class="arm-conn-empty">
+                                <p>No connections yet.</p>
+                                <button class="arm-link-btn" onclick={handleOpenQC}>+ Add a quick connect</button>
+                            </div>
+                        </template>
+                    </template>
+
+                </div><!-- end arm-pb -->
+
+                <div class="arm-pa">
+                    <button class="arm-btn-brand" onclick={handleOpenQCFromPanel}>+ Quick Connect</button>
+                    <button class="arm-btn-out" onclick={handleViewRecord}>View in Salesforce</button>
+                    <button class="arm-btn-out" onclick={handleLogActivity}>Log Activity</button>
+                </div>
+            </div>
+        </template>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             CREATE CONTACT MODAL
+        ════════════════════════════════════════════════════════════════ -->
+        <template if:true={ccOpen}>
+            <div class="arm-modal-backdrop" onclick={handleCloseCCBackdrop}>
+                <div class="arm-modal arm-cc-modal">
+                    <div class="arm-modal-hdr">
+                        <h4>Create Contact</h4>
+                        <button class="arm-close-btn" onclick={handleCloseCC}>×</button>
+                    </div>
+                    <div class="arm-modal-body">
+                        <div class="arm-cc-info-note">
+                            Account pre-filled. Fields marked
+                            <span class="arm-cc-req-star">*</span> are required.
+                        </div>
+                        <div class="arm-cc-section-hdr">Account</div>
+                        <div class="arm-cc-row">
+                            <span class="arm-cc-lbl">Account Name <span class="arm-cc-req-star">*</span></span>
+                            <div class="arm-cc-val">
+                                <input class="arm-cc-input arm-cc-prefilled"
+                                    type="text" value={accountName} readonly />
+                            </div>
+                        </div>
+                        <div class="arm-cc-section-hdr">Contact details</div>
+                        <template for:each={ccModalFields} for:item="f">
+                            <div key={f.key} class="arm-cc-row">
+                                <span class="arm-cc-lbl">
+                                    {f.label}
+                                    <template if:true={f.required}>
+                                        <span class="arm-cc-req-star"> *</span>
+                                    </template>
+                                </span>
+                                <div class="arm-cc-val">
+                                    <template if:true={f.isText}>
+                                        <input class={f.inputClass}
+                                            type={f.type}
+                                            value={f.value}
+                                            data-key={f.key}
+                                            oninput={handleCCFieldChange} />
+                                    </template>
+                                    <template if:true={f.isSelect}>
+                                        <select class={f.inputClass}
+                                            data-key={f.key}
+                                            onchange={handleCCFieldChange}>
+                                            <template for:each={f.options} for:item="o">
+                                                <option key={o.value} value={o.value}>{o.label}</option>
+                                            </template>
+                                        </select>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="arm-modal-footer">
+                        <button class="arm-btn-cancel" onclick={handleCloseCC}>Cancel</button>
+                        <button class="arm-btn-save" onclick={handleSaveCC}
+                            disabled={ccSaveDisabled}>{ccSaveLabel}</button>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             QUICK CONNECT MODAL
+        ════════════════════════════════════════════════════════════════ -->
+        <template if:true={qcOpen}>
+            <div class="arm-modal-backdrop" onclick={handleModalBackdrop}>
+                <div class="arm-modal">
+                    <div class="arm-modal-hdr">
+                        <h4>Quick Connect</h4>
+                        <button class="arm-close-btn" onclick={handleCloseQC}>×</button>
+                    </div>
+                    <div class="arm-modal-body">
+                        <div class="arm-qc-lbl">From</div>
+                        <div class="arm-qc-from">
+                            <template if:true={qcFromContact}>
+                                <div class="arm-av-wrap" style="width:28px;height:28px;flex-shrink:0">
+                                    <div class="arm-av arm-av-28" style={qcFromContact.avatarStyle}>{qcFromContact.initials}</div>
+                                    <div class="arm-av-ring" style={qcFromContact.ringStyle}></div>
+                                </div>
+                                <div>
+                                    <div class="arm-qc-from-nm">{qcFromContact.Name}</div>
+                                    <div class="arm-qc-from-tt">{qcFromContact.titleDisplay}</div>
+                                </div>
+                            </template>
+                            <template if:false={qcFromContact}>
+                                <span class="arm-muted">Select a contact from the list below</span>
+                            </template>
+                        </div>
+                        <div class="arm-qc-lbl">Connection type</div>
+                        <div class="arm-qc-type">
+                            <template for:each={qcConnTypes} for:item="ct">
+                                <button key={ct.label} class={ct.btnClass}
+                                    data-type={ct.label}
+                                    onclick={handleQCType}>{ct.label}</button>
+                            </template>
+                        </div>
+                        <template if:true={qcToContact}>
+                            <div class="arm-qc-arrow">{qcArrowLabel}</div>
+                            <div class="arm-qc-from">
+                                <div class="arm-av-wrap" style="width:28px;height:28px;flex-shrink:0">
+                                    <div class="arm-av arm-av-28" style={qcToContact.avatarStyle}>{qcToContact.initials}</div>
+                                    <div class="arm-av-ring" style={qcToContact.ringStyle}></div>
+                                </div>
+                                <div>
+                                    <div class="arm-qc-from-nm">{qcToContact.Name}</div>
+                                    <div class="arm-qc-from-tt">{qcToContact.titleDisplay}</div>
+                                </div>
+                            </div>
+                        </template>
+                        <div class="arm-qc-lbl">To — select contact</div>
+                        <input type="text" class="arm-qc-search"
+                            placeholder="Search contacts…"
+                            value={_qcSearch} oninput={handleQCSearch} />
+                        <div class="arm-qc-list">
+                            <template for:each={qcCandidates} for:item="c">
+                                <div key={c.Id} class={c.qcItemClass}
+                                    data-id={c.Id} onclick={handleQCSelect}>
+                                    <div class="arm-av-wrap" style="width:28px;height:28px;flex-shrink:0">
+                                        <div class="arm-av arm-av-28" style={c.avatarStyle}>{c.initials}</div>
+                                        <div class="arm-av-ring" style={c.ringStyle}></div>
+                                    </div>
+                                    <div class="arm-qc-item-info">
+                                        <div class="arm-qc-item-nm">{c.Name}</div>
+                                        <div class="arm-qc-item-tt">{c.titleDisplay} · {c.deptDisplay}</div>
+                                    </div>
+                                    <template if:true={c.isQCSelected}>
+                                        <div class="arm-qc-check">✓</div>
+                                    </template>
+                                </div>
+                            </template>
+                            <template if:true={qcNoResults}>
+                                <div class="arm-muted arm-qc-none">No contacts found</div>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="arm-modal-footer">
+                        <button class="arm-btn-cancel" onclick={handleCloseQC}>Cancel</button>
+                        <button class="arm-btn-save" onclick={handleSaveQC}
+                            disabled={qcSaveDisabled}>Save Connection</button>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- Toast -->
+        <template if:true={toastVisible}>
+            <div class="arm-toast">{toastMessage}</div>
+        </template>
+
+    </div>
+</template>
