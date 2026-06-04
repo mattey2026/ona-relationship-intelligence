@@ -1,3 +1,16 @@
+/**
+ * ============================================================
+ * ONA Relationship Intelligence — Version 4.1
+ * ============================================================
+ * Author      : Sumit Mattey
+ * Organisation: Genpact — Salesforce Practice
+ * Updated     : 04 June 2026
+ * ------------------------------------------------------------
+ * Stylesheet for onaRelationshipMap LWC.
+ * Light mode default. Dark mode via .ona-app.dark on root div.
+ * All colours use CSS custom properties (var(--xxx)).
+ * ============================================================
+ */
 /* ONA Relationship Intelligence — Phase 2 Styles
    Light mode DEFAULT. Dark mode via .ona-app.dark on root div.
 */

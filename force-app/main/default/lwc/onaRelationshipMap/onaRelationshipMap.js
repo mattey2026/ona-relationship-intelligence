@@ -1,3 +1,21 @@
+/**
+ * ============================================================
+ * ONA Relationship Intelligence — Version 4.1
+ * ============================================================
+ * Author      : Sumit Mattey
+ * Organisation: Genpact — Salesforce Practice
+ * GitHub      : https://github.com/mattey2026/ona-relationship-intelligence
+ * Updated     : 04 June 2026
+ * ------------------------------------------------------------
+ * LWC Component: onaRelationshipMap
+ * Description :
+ *   Lightning Web Component powering the full ONA UI —
+ *   D3 force-directed graph, Analytics pane (Timeline, Power
+ *   Map, Impact Simulator, Risk Radar), Portfolio View,
+ *   Relationship Summary Bell Popup, Contact Insight Panel,
+ *   and 14-step guided tour.
+ * ============================================================
+ */
 import { LightningElement, track, api } from 'lwc';
 import { loadScript }      from 'lightning/platformResourceLoader';
 import { ShowToastEvent }  from 'lightning/platformShowToastEvent';

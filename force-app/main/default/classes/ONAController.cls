@@ -1,20 +1,27 @@
 /**
- * ONAController.cls  —  Phase 2
- *
- * Phase 1 algorithms (unchanged):
- *   Alg 1  Relationship Strength       email×3 + meeting×5 + task×2 + opp×4
- *   Alg 2  Influence Score             connections×2 + activity×3 + roleWeight
- *   Alg 3  Network Centrality          degree(60%) + weighted(40%) + Union-Find clusters
- *   Alg 4  Recommendation Engine       influence + centrality + paths×10 + sameCluster×12
- *
- * Phase 2 algorithms (new):
- *   Alg 5  Engagement Decay            Σ(weight × e^(-λ × monthsAgo))  λ=0.18
- *   Alg 6  Velocity Scoring            (last90 - prior90) / prior90
- *   Alg 7  Betweenness Centrality      Brandes algorithm O(VE)
- *   Alg 8  BFS Shortest Path           warm intro route finder
- *   Alg 9  Whitespace Analysis         depts with < 3 activities = gap
- *   Alg 10 Coverage Score              deptCoverage×0.6 + seniorityCoverage×0.4
- *   Alg 11 Multi-thread Risk           Herfindahl-Hirschman Index, inverted
+ * ============================================================
+ * ONA Relationship Intelligence — Version 4.1
+ * ============================================================
+ * Author      : Sumit Mattey
+ * Organisation: Genpact — Salesforce Practice
+ * GitHub      : https://github.com/mattey2026/ona-relationship-intelligence
+ * Updated     : 04 June 2026
+ * ------------------------------------------------------------
+ * Description :
+ *   Salesforce-native Organisational Network Analysis platform.
+ *   Maps, scores and trends every relationship inside your key
+ *   accounts using 11 graph algorithms — 100% Apex + LWC + D3.
+ * ------------------------------------------------------------
+ * Features (v4.1):
+ *   - 11 Graph algorithms (Strength, Influence, Centrality,
+ *     Betweenness, Decay, Velocity, BFS, Whitespace, Coverage,
+ *     Multi-thread Risk, Recommendation Engine)
+ *   - Analytics Pane: Timeline, Power Map, Impact Simulator,
+ *     Risk Radar
+ *   - Relationship Summary Bell Popup
+ *   - Portfolio View with GNews external signals
+ *   - 100% Apex test coverage (42 test methods)
+ * ============================================================
  */
 public with sharing class ONAController {
 

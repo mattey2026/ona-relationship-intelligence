@@ -1,6 +1,27 @@
 /**
- * ONAModels.cls  —  Phase 2
- * Data wrapper classes for ONA Relationship Intelligence.
+ * ============================================================
+ * ONA Relationship Intelligence — Version 4.1
+ * ============================================================
+ * Author      : Sumit Mattey
+ * Organisation: Genpact — Salesforce Practice
+ * GitHub      : https://github.com/mattey2026/ona-relationship-intelligence
+ * Updated     : 04 June 2026
+ * ------------------------------------------------------------
+ * Description :
+ *   Salesforce-native Organisational Network Analysis platform.
+ *   Maps, scores and trends every relationship inside your key
+ *   accounts using 11 graph algorithms — 100% Apex + LWC + D3.
+ * ------------------------------------------------------------
+ * Features (v4.1):
+ *   - 11 Graph algorithms (Strength, Influence, Centrality,
+ *     Betweenness, Decay, Velocity, BFS, Whitespace, Coverage,
+ *     Multi-thread Risk, Recommendation Engine)
+ *   - Analytics Pane: Timeline, Power Map, Impact Simulator,
+ *     Risk Radar
+ *   - Relationship Summary Bell Popup
+ *   - Portfolio View with GNews external signals
+ *   - 100% Apex test coverage (42 test methods)
+ * ============================================================
  */
 public with sharing class ONAModels {
 
