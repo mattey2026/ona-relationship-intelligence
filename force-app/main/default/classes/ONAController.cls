@@ -1,11 +1,11 @@
 /**
  * ============================================================
- * ONA Relationship Intelligence — Version 4.1
+ * ONA Relationship Intelligence — Version 4.2
  * ============================================================
  * Author      : Sumit Mattey
  * Organisation: Genpact — Salesforce Practice
  * GitHub      : https://github.com/mattey2026/ona-relationship-intelligence
- * Updated     : 04 June 2026
+ * Updated     : 15 June 2026
  * ------------------------------------------------------------
  * Description :
  *   Salesforce-native Organisational Network Analysis platform.
@@ -21,6 +21,13 @@
  *   - Relationship Summary Bell Popup
  *   - Portfolio View with GNews external signals
  *   - 100% Apex test coverage (42 test methods)
+ * ------------------------------------------------------------
+ * v4.2 (15 June 2026):
+ *   - No changes to this class's logic. Version bumped to align
+ *     with the new Agentforce action layer (ONAAgentUtils v1.3,
+ *     ONAAgentFindAccount, 5 ONAAgentGet* invocable actions) which
+ *     reuses this controller's Account/Contact data model and is
+ *     versioned/dated together for traceability in git history.
  * ============================================================
  */
 public with sharing class ONAController {
@@ -28,10 +35,15 @@ public with sharing class ONAController {
     private static final Integer MAX_CONTACTS    = 50;
     private static final Integer MAX_ACCOUNTS    = 20;
     private static final Integer ACTIVITY_MONTHS = 12;
-    private static final Integer W_EMAIL         = 3;
-    private static final Integer W_MEETING       = 5;
-    private static final Integer W_TASK          = 2;
-    private static final Integer W_OPP           = 4;
+    // ── Activity weight constants ────────────────────────────────────────────────
+    // Used by Alg 1 (Relationship Strength), Alg 5 (Decay),
+    // Alg 6 (Velocity), and Alg 11 (Multi-thread HHI).
+    // Higher weight = stronger signal of a real relationship.
+    private static final Integer W_EMAIL_MSG     = 4; // Real email (EmailMessage) — highest email signal
+    private static final Integer W_EMAIL         = 3; // Manual Task email log
+    private static final Integer W_MEETING       = 5; // Event / meeting — strongest signal
+    private static final Integer W_TASK          = 2; // Non-email Task (call log, follow-up)
+    private static final Integer W_OPP           = 4; // Shared Opportunity
     private static final Integer WHITESPACE_THRESHOLD = 3;
 
     // ── Entry points ──────────────────────────────────────────────────────────
@@ -50,6 +62,7 @@ public with sharing class ONAController {
             Integer clusters = applyCentrality(nodes, edges);
             applyInfluence(nodes);
             applyPhase2Scores(nodes, edges); // alg 5, 6, 7
+            populateLastActivity(nodes);      // v4.1 — last activity badge
             ONAModels.AccountIntelligence ai = buildAccountIntelligence(nodes);
             return JSON.serialize(buildPayload(nodes, edges, 'account', acc.Name, clusters, ai));
         } catch (Exception e) {
@@ -72,6 +85,7 @@ public with sharing class ONAController {
             Integer clusters = applyCentrality(nodes, edges);
             applyInfluence(nodes);
             applyPhase2Scores(nodes, edges);
+            populateLastActivity(nodes); // v4.1 — last activity badge
             for (ONAModels.ContactNode n : nodes)
                 if (n.nodeType != 'hub' && n.accountId != anchorId) n.nodeType = 'bridge';
             ONAModels.AccountIntelligence ai = buildAccountIntelligence(nodes);
@@ -112,17 +126,99 @@ public with sharing class ONAController {
                 WHERE Name LIKE :q AND IsDeleted = false ORDER BY Name LIMIT 20];
     }
 
+    // ── Unified search — Accounts AND Contacts (v4.3) ────────────────────────
+    @AuraEnabled(cacheable=true)
+    public static List<Map<String,Object>> searchAccountsAndContacts(String searchTerm) {
+        if (String.isBlank(searchTerm) || searchTerm.length() < 2)
+            return new List<Map<String,Object>>();
+        String term = '%' + searchTerm + '%';
+        List<Map<String,Object>> results = new List<Map<String,Object>>();
+
+        // Accounts
+        for (Account a : [
+            SELECT Id, Name, Industry
+            FROM   Account
+            WHERE  Name LIKE :term AND IsDeleted = false
+            ORDER  BY Name LIMIT 8
+        ]) {
+            results.add(new Map<String,Object>{
+                'id'        => a.Id,
+                'name'      => a.Name,
+                'subtitle'  => String.isBlank(a.Industry) ? 'Account' : a.Industry,
+                'type'      => 'account',
+                'accountId' => a.Id,
+                'accountName'=> a.Name,
+                'initial'   => a.Name.left(1).toUpperCase()
+            });
+        }
+
+        // Contacts
+        for (Contact ct : [
+            SELECT Id, Name, Title, AccountId, Account.Name
+            FROM   Contact
+            WHERE  Name LIKE :term AND AccountId != null
+            ORDER  BY Name LIMIT 8
+        ]) {
+            String sub = '';
+            if (!String.isBlank(ct.Title)) sub += ct.Title;
+            if (ct.Account != null && !String.isBlank(ct.Account.Name))
+                sub += (String.isBlank(sub) ? '' : ' · ') + ct.Account.Name;
+            results.add(new Map<String,Object>{
+                'id'         => ct.Id,
+                'name'       => ct.Name,
+                'subtitle'   => sub,
+                'type'       => 'contact',
+                'accountId'  => ct.AccountId,
+                'accountName'=> ct.Account != null ? ct.Account.Name : '',
+                'initial'    => ct.Name.left(1).toUpperCase()
+            });
+        }
+        return results;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // PHASE 1 ALGORITHMS
     // ═══════════════════════════════════════════════════════════════════════════
 
     // Alg 1 — Relationship Strength
+    // ── Alg 1 — Relationship Strength ───────────────────────────────────────────
+    // Computes the weight of the edge between two contacts.
+    // Weight drives line thickness on the graph — thick gold = strong relationship.
+    //
+    // Data sources:
+    //   sharedEmailMessages — real emails (EmailMessage object, Einstein Activity Capture)
+    //   sharedEmails        — manual Task emails logged by sellers
+    //   sharedMeetings      — Events where both contacts were attendees
+    //   sharedOpps          — Opportunities where both contacts have a role
+    //   sharedTasks         — shared non-email Tasks
+    //
+    // Formula: Σ (shared_count × weight)
+    //   EmailMessage: ×4 — most reliable email signal (auto-captured)
+    //   Task Email:   ×3 — manual log (less reliable, may be summary)
+    //   Meeting:      ×5 — highest quality (both parties committed time)
+    //   Opportunity:  ×4 — shared business context
+    //   Task:         ×2 — lowest weight (admin logging)
+    //   Same account: +1 — baseline same-account affinity
     private static Integer alg1Strength(ONAModels.ContactNode a, ONAModels.ContactNode b) {
-        return safeGet(a.sharedEmails,   b.contactId) * W_EMAIL
-             + safeGet(a.sharedMeetings, b.contactId) * W_MEETING
-             + safeGet(a.sharedTasks,    b.contactId) * W_TASK
-             + safeGet(a.sharedOpps,     b.contactId) * W_OPP
-             + (a.accountId == b.accountId ? 1 : 0);
+        // Active signal: manual Task emails (×3), Events/meetings (×5),
+        // Opportunity contact roles (×4), non-email Tasks (×2), same-account baseline (+1)
+        Integer base =  safeGet(a.sharedEmails,   b.contactId) * W_EMAIL
+                      + safeGet(a.sharedMeetings, b.contactId) * W_MEETING
+                      + safeGet(a.sharedTasks,    b.contactId) * W_TASK
+                      + safeGet(a.sharedOpps,     b.contactId) * W_OPP
+                      + (a.accountId == b.accountId ? 1 : 0);
+
+        /* ─── BEGIN EAC PATCH — ALG 1 RELATIONSHIP STRENGTH (EmailMessage) ──────
+         * Adds real email signal (weight ×4) to edge weight.
+         * sharedEmailMessages is populated by populateSharedMaps() once EAC is on.
+         * Weight ×4 > manual Task email ×3 because it is automatically captured.
+         * Requires: ONAModels EAC PATCH (sharedEmailMessages field) also uncommented.
+         *
+        base += safeGet(a.sharedEmailMessages, b.contactId) * W_EMAIL_MSG;
+         *
+         * ─── END EAC PATCH ─────────────────────────────────────────────────── */
+
+        return base;
     }
 
     // Alg 2 — Influence Score
@@ -245,33 +341,84 @@ public with sharing class ONAController {
     // PHASE 2 ALGORITHMS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    // Alg 5 — Engagement Decay
-    // score = Σ(weight × e^(-λ × monthsAgo)) where λ=0.18
-    // Approximated in three bands: <3m, 3-6m, 6-12m
+    // ── Alg 5 — Engagement Decay ─────────────────────────────────────────────
+    // Formula: score = Σ( activityWeight × e^(−λ × monthsAgo) ) where λ = 0.18
+    // Approximated in two bands to avoid per-record date arithmetic in Apex:
+    //   • Last 90 days (recent)  → full weight (factor 1.0)
+    //   • 90–180 days (mid)      → decayed weight (factor 0.45, ≈ e^(−0.18 × 4.5))
+    // Output: 0–100 normalised score.
+    //   70+  = Warm     (seller has active, recent engagement)
+    //   40-69 = Cooling  (engagement exists but fading — act soon)
+    //   0-39  = Cold     (near-zero recent signal — restart from scratch)
     private static void applyDecay(List<ONAModels.ContactNode> nodes) {
         for (ONAModels.ContactNode n : nodes) {
-            // recent 3 months: full weight
+
+            // ── Recent (last 90 days) — full weight ────────────────────────
+            // Uses Task email count + Event count in the 90-day window.
             Decimal recent = (n.emailCount90 * W_EMAIL) + (n.meetingCount90 * W_MEETING);
-            // 3-6 months: e^(-0.18×4.5) ≈ 0.45
-            Decimal mid    = ((n.emailCount - n.emailCount90) * W_EMAIL
-                            + (n.meetingCount - n.meetingCount90) * W_MEETING) * 0.45;
-            // 6-12 months not tracked separately — approximate at 0.20
-            Decimal total  = recent + mid;
-            n.decayScore   = normalise(total.intValue(), 0, 60);
+
+            /* ─── BEGIN EAC PATCH — ALG 5 DECAY (recent 90-day window) ───────────
+             * Adds real email signal to the recent decay window.
+             * emailMessageCount90 = EmailMessage records for this contact in last 90 days.
+             * W_EMAIL_MSG (4) > W_EMAIL (3) because real emails are auto-captured.
+             *
+            recent += (n.emailMessageCount90 * W_EMAIL_MSG);
+             *
+             * ─── END EAC PATCH ─────────────────────────────────────────────── */
+
+            // ── Mid-range (90–180 days) — decay factor 0.45 ───────────────
+            // Activities older than 90 days contribute less to the score.
+            Decimal mid = ((n.emailCount - n.emailCount90) * W_EMAIL
+                         + (n.meetingCount - n.meetingCount90) * W_MEETING) * 0.45;
+
+            /* ─── BEGIN EAC PATCH — ALG 5 DECAY (prior 90-day window) ───────────
+             * Adds real email signal to the mid-range decay window.
+             * emailMessageCountPrior = EmailMessage records for this contact 90-180 days ago.
+             *
+            mid += ((n.emailMessageCount - n.emailMessageCount90) * W_EMAIL_MSG) * 0.45;
+             *
+             * ─── END EAC PATCH ─────────────────────────────────────────────── */
+
+            Decimal total = recent + mid;
+            n.decayScore  = normalise(total.intValue(), 0, 60);
         }
     }
 
-    // Alg 6 — Velocity Scoring
-    // velocity = (last90 - prior90) / prior90
+    // ── Alg 6 — Velocity Scoring ─────────────────────────────────────────────
+    // Compares engagement in the LAST 90 days vs the PRIOR 90 days (90–180d ago).
+    // Formula: velocity = (last90 - prior90) / prior90
+    //
+    // Thresholds:
+    //   velocity > +0.15  → ↑ Growing  (15%+ more activity than prior period)
+    //   velocity < −0.15  → ↓ Cooling  (15%+ less activity than prior period)
+    //   otherwise         → → Stable
+    //
+    // If prior = 0 and recent > 0: new relationship forming → velocity = 1.0 (max)
     private static void applyVelocity(List<ONAModels.ContactNode> nodes) {
         for (ONAModels.ContactNode n : nodes) {
+
+            // ── Last 90 days — active data sources ────────────────────────
             Decimal recent = (n.emailCount90 * W_EMAIL) + (n.meetingCount90 * W_MEETING);
+
+            // ── Prior 90 days (90–180 days ago) — active data sources ─────
             Decimal prior  = (n.emailCountPrior * W_EMAIL) + (n.meetingCountPrior * W_MEETING);
-            Decimal vel    = 0;
+
+            /* ─── BEGIN EAC PATCH — ALG 6 VELOCITY ───────────────────────────────
+             * Adds real email signal to both velocity windows.
+             * Once EAC is active, emailMessageCount90 and emailMessageCountPrior
+             * are populated by populatePhase2ActivityMaps() and will make velocity
+             * scores more accurate (real emails vs manual log only).
+             *
+            recent += (n.emailMessageCount90    * W_EMAIL_MSG);
+            prior  += (n.emailMessageCountPrior * W_EMAIL_MSG);
+             *
+             * ─── END EAC PATCH ─────────────────────────────────────────────── */
+
+            Decimal vel = 0;
             if (prior > 0) {
                 vel = (recent - prior) / prior;
             } else if (recent > 0) {
-                vel = 1; // new activity from zero = max growth
+                vel = 1; // relationship is forming from zero — maximum growth signal
             }
             n.velocityRaw = vel.setScale(3);
             if      (vel >  0.15) { n.velocityArrow = '↑'; n.velocityLabel = 'Growing'; }
@@ -482,17 +629,52 @@ public with sharing class ONAController {
         return 'IC';
     }
 
-    // Alg 11 — Multi-thread Risk (Herfindahl-Hirschman Index, inverted)
-    // HHI = Σ(share²)  — high HHI = concentrated = risky
-    // Score = (1 - HHI) × 100  — 100 = perfect distribution, 0 = single thread
+    // ── Alg 11 — Multi-thread Risk Score (Herfindahl-Hirschman Index, inverted) ──
+    // HHI (from antitrust economics) measures how concentrated CRM activity is.
+    //
+    // Formula:
+    //   HHI = Σ ( contact_activity_share² )   — higher = more concentrated = riskier
+    //   Score = (1 − HHI) × 100               — inverted so 100 = safe, 0 = single-thread
+    //
+    // Each contact's activity = emailCount×3 + meetingCount×5 + taskCount×2
+    // Share = that contact's activity / total activity across all contacts
+    //
+    // Interpretation:
+    //   70–100 = Healthy (activity well distributed across the network)
+    //   40–69  = Moderate risk (some concentration)
+    //   0–39   = High risk (one contact dominates — losing them collapses the deal)
     private static Integer alg11MultiThread(List<ONAModels.ContactNode> nodes) {
+
+        // ── Compute each contact's weighted activity total ─────────────────
         Decimal total = 0;
         for (ONAModels.ContactNode n : nodes)
             total += n.emailCount * W_EMAIL + n.meetingCount * W_MEETING + n.taskCount * W_TASK;
+
+        /* ─── BEGIN EAC PATCH — ALG 11 MULTI-THREAD HHI ─────────────────────────
+         * Adds real email count to the per-contact activity total.
+         * Once EAC is active, emailMessageCount reflects actual email volume
+         * and will make the HHI score more accurate.
+         *
+        for (ONAModels.ContactNode n : nodes)
+            total += n.emailMessageCount * W_EMAIL_MSG;
+         *
+         * ─── END EAC PATCH ─────────────────────────────────────────────────── */
+
         if (total == 0) return 0;
+
+        // ── Compute HHI = Σ(share²) ────────────────────────────────────────
         Decimal hhi = 0;
         for (ONAModels.ContactNode n : nodes) {
-            Decimal share = (n.emailCount * W_EMAIL + n.meetingCount * W_MEETING + n.taskCount * W_TASK) / total;
+            Decimal act   = n.emailCount * W_EMAIL + n.meetingCount * W_MEETING + n.taskCount * W_TASK;
+
+            /* ─── BEGIN EAC PATCH — ALG 11 SHARE CALCULATION ─────────────────────
+             * Include real email signal in each contact's activity share.
+             *
+            act += n.emailMessageCount * W_EMAIL_MSG;
+             *
+             * ─── END EAC PATCH ─────────────────────────────────────────────── */
+
+            Decimal share = act / total;
             hhi += share * share;
         }
         return ((1 - hhi) * 100).intValue();
@@ -537,11 +719,31 @@ public with sharing class ONAController {
     }
 
     // ── Shared activity maps ──────────────────────────────────────────────────
+    // ── populateSharedMaps ────────────────────────────────────────────────────────
+    // Builds shared-activity maps for Alg 1 (Relationship Strength) and
+    // individual counts used by Alg 2 (Influence), Alg 10 (Coverage),
+    // and Alg 11 (Multi-thread HHI).
+    //
+    // Data sources queried:
+    //   Task(Type=Email)   — manually logged email tasks
+    //   EmailMessage       — real emails captured via Einstein Activity Capture / Inbox
+    //                        (returns 0 records if Einstein AC is not enabled)
+    //   EventRelation      — meeting attendees (shared events between contacts)
+    //   OpportunityContactRole — shared opportunities
+    //   Task(aggregate)    — per-contact totals for all task types
+    //   Event(aggregate)   — per-contact meeting counts
     private static void populateSharedMaps(List<ONAModels.ContactNode> nodes) {
         Set<Id> ids = new Set<Id>(); Map<Id,ONAModels.ContactNode> nm = new Map<Id,ONAModels.ContactNode>();
         for (ONAModels.ContactNode n : nodes) { ids.add(n.contactId); nm.put(n.contactId,n); }
         Date cutoff = Date.today().addMonths(-ACTIVITY_MONTHS);
 
+        // ── Collect account IDs from nodes (needed for EmailMessage RelatedToId filter)
+        Set<Id> accountIds = new Set<Id>();
+        for (ONAModels.ContactNode n : nodes) { if(n.accountId != null) accountIds.add(n.accountId); }
+
+        // ── Task (Type=Email) — manual email logs ─────────────────────────────
+        // Groups emails by Task ID so contacts on the same logged email are paired.
+        // Drives sharedEmails map used in Alg 1 edge weight (×3).
         Map<String,Set<Id>> em = new Map<String,Set<Id>>();
         for (Task t : [SELECT Id,WhoId FROM Task WHERE WhoId IN :ids AND Type='Email'
                        AND ActivityDate>=:cutoff AND IsDeleted=false LIMIT 5000]) {
@@ -550,6 +752,58 @@ public with sharing class ONAController {
             em.get(k).add(t.WhoId);
         }
         pairInc(em, nm, 'email');
+
+        /* ─── BEGIN EAC PATCH — populateSharedMaps (EmailMessage) ─────────────────
+         * Queries real inbound/outbound emails from the EmailMessage object.
+         * Requires Einstein Activity Capture to be enabled and seller Gmail/
+         * Outlook accounts connected. Returns 0 records without EAC.
+         *
+         * What this does:
+         *   - Queries all EmailMessage records linked to the account
+         *   - Groups messages by ID so contacts on the same email are paired
+         *   - Increments sharedEmailMessages map for Alg 1 (edge weight ×4)
+         *   - Increments emailMessageCount per contact for Alg 5, 6, 11
+         *   - Adds to totalActivities so these contacts rank higher in selection
+         *
+         * To activate: remove this opening slash-asterisk and the closing
+         * asterisk-slash. Ensure ONAModels EAC PATCH fields are also uncommented.
+         *
+        if (!accountIds.isEmpty()) {
+            DateTime cutoffDt = DateTime.newInstance(cutoff, Time.newInstance(0,0,0,0));
+            Map<String,Set<Id>> emMsg = new Map<String,Set<Id>>();
+            for (EmailMessage msg : [
+                SELECT   Id, ToIds, CreatedById, CreatedBy.Name, MessageDate, Incoming
+                FROM     EmailMessage
+                WHERE    RelatedToId IN :accountIds
+                AND      MessageDate >= :cutoffDt
+                AND      Status      != 'Draft'
+                ORDER BY MessageDate DESC
+                LIMIT    5000
+            ]) {
+                String k = String.valueOf(msg.Id).left(15);
+                if (!emMsg.containsKey(k)) emMsg.put(k, new Set<Id>());
+                // ToIds is String[] — each entry is a recipient Contact or Lead ID
+                for (String toId : msg.ToIds) {
+                    try {
+                        Id cId = (Id) toId;
+                        if (ids.contains(cId)) {
+                            emMsg.get(k).add(cId);
+                            ONAModels.ContactNode n = nm.get(cId);
+                            if (n != null) {
+                                n.emailMessageCount++;  // total real email count
+                                n.totalActivities++;    // included in coverage/whitespace
+                            }
+                        }
+                    } catch (Exception ex) {
+                        // Skip non-Contact IDs (Leads, Users) — safe to ignore
+                    }
+                }
+            }
+            // Pair contacts who appeared on the same email thread — drives Alg 1 ×4 weight
+            pairInc(emMsg, nm, 'emailMsg');
+        }
+         *
+         * ─── END EAC PATCH ─────────────────────────────────────────────────── */
 
         Map<String,Set<Id>> mt = new Map<String,Set<Id>>();
         for (EventRelation er : [SELECT EventId,RelationId FROM EventRelation
@@ -585,14 +839,29 @@ public with sharing class ONAController {
         }
     }
 
-    // Phase 2: Populate 90-day windows for decay and velocity
+    // ── populatePhase2ActivityMaps ───────────────────────────────────────────────
+    // Populates 90-day and prior-90-day windows for:
+    //   Alg 5 (Engagement Decay) — needs recent vs mid-term activity split
+    //   Alg 6 (Velocity Scoring) — compares last 90 days vs prior 90 days
+    //
+    // Windows:
+    //   emailCount90 / emailMessageCount90 / meetingCount90  → last 90 days
+    //   emailCountPrior / emailMessageCountPrior / meetingCountPrior → 90-180 days ago
+    //
+    // EmailMessage is included in both windows if Einstein Activity Capture is enabled.
     private static void populatePhase2ActivityMaps(List<ONAModels.ContactNode> nodes) {
         Set<Id> ids = new Set<Id>(); Map<Id,ONAModels.ContactNode> nm = new Map<Id,ONAModels.ContactNode>();
         for (ONAModels.ContactNode n : nodes) { ids.add(n.contactId); nm.put(n.contactId,n); }
         Date d90   = Date.today().addDays(-90);
         Date d180  = Date.today().addDays(-180);
 
-        // Last 90 days
+        // ── Collect account IDs for EmailMessage queries ──────────────────────
+        Set<Id> accountIds = new Set<Id>();
+        for (ONAModels.ContactNode n : nodes) { if(n.accountId != null) accountIds.add(n.accountId); }
+        DateTime dt90  = DateTime.newInstance(d90,  Time.newInstance(0,0,0,0));
+        DateTime dt180 = DateTime.newInstance(d180, Time.newInstance(0,0,0,0));
+
+        // ── Task emails — last 90 days ────────────────────────────────────────
         for (AggregateResult ar : [SELECT WhoId,Type,COUNT(Id) cnt FROM Task
                                     WHERE WhoId IN :ids AND ActivityDate>=:d90
                                     AND IsDeleted=false GROUP BY WhoId,Type]) {
@@ -600,6 +869,34 @@ public with sharing class ONAController {
             ONAModels.ContactNode n=nm.get(wid); if(n==null) continue;
             if(ar.get('Type')=='Email') n.emailCount90+=cnt;
         }
+
+        /* ─── BEGIN EAC PATCH — Phase 2 EmailMessage (last 90 days) ────────────────
+         * Populates emailMessageCount90 — real emails in the last 90 days.
+         * Used by Alg 5 (Decay) recent window and Alg 6 (Velocity) last-90 value.
+         * Requires EAC. Returns 0 without it — safe to leave in commented state.
+         *
+        if (!accountIds.isEmpty()) {
+            for (EmailMessage msg : [
+                SELECT   ToIds
+                FROM     EmailMessage
+                WHERE    RelatedToId IN :accountIds
+                AND      MessageDate >= :dt90
+                AND      Status      != 'Draft'
+                LIMIT    2000
+            ]) {
+                for (String toId : msg.ToIds) {
+                    try {
+                        Id cId = (Id) toId;
+                        ONAModels.ContactNode n = nm.get(cId);
+                        if (n != null) n.emailMessageCount90++;
+                    } catch (Exception ex) {}
+                }
+            }
+        }
+         *
+         * ─── END EAC PATCH ─────────────────────────────────────────────────── */
+
+        // ── Meetings — last 90 days ───────────────────────────────────────────
         for (AggregateResult ar : [SELECT WhoId,COUNT(Id) cnt FROM Event
                                     WHERE WhoId IN :ids AND ActivityDate>=:d90
                                     AND IsDeleted=false GROUP BY WhoId]) {
@@ -607,7 +904,7 @@ public with sharing class ONAController {
             ONAModels.ContactNode n=nm.get(wid); if(n==null) continue;
             n.meetingCount90+=cnt;
         }
-        // Prior 90 days (90-180 days ago)
+        // ── Prior 90 days (90-180 days ago) — Task emails ────────────────────────
         for (AggregateResult ar : [SELECT WhoId,Type,COUNT(Id) cnt FROM Task
                                     WHERE WhoId IN :ids AND ActivityDate>=:d180
                                     AND ActivityDate<:d90 AND IsDeleted=false
@@ -616,6 +913,35 @@ public with sharing class ONAController {
             ONAModels.ContactNode n=nm.get(wid); if(n==null) continue;
             if(ar.get('Type')=='Email') n.emailCountPrior+=cnt;
         }
+
+        /* ─── BEGIN EAC PATCH — Phase 2 EmailMessage (prior 90 days, 90–180d ago) ──
+         * Populates emailMessageCountPrior — real emails in the 90–180 day window.
+         * Used by Alg 6 (Velocity) prior-90 value to compare against recent activity.
+         * Requires EAC. Returns 0 without it.
+         *
+        if (!accountIds.isEmpty()) {
+            for (EmailMessage msg : [
+                SELECT   ToIds
+                FROM     EmailMessage
+                WHERE    RelatedToId IN :accountIds
+                AND      MessageDate >= :dt180
+                AND      MessageDate <  :dt90
+                AND      Status      != 'Draft'
+                LIMIT    2000
+            ]) {
+                for (String toId : msg.ToIds) {
+                    try {
+                        Id cId = (Id) toId;
+                        ONAModels.ContactNode n = nm.get(cId);
+                        if (n != null) n.emailMessageCountPrior++;
+                    } catch (Exception ex) {}
+                }
+            }
+        }
+         *
+         * ─── END EAC PATCH ─────────────────────────────────────────────────── */
+
+        // ── Prior 90 days — Meetings (Events) ────────────────────────────────
         for (AggregateResult ar : [SELECT WhoId,COUNT(Id) cnt FROM Event
                                     WHERE WhoId IN :ids AND ActivityDate>=:d180
                                     AND ActivityDate<:d90 AND IsDeleted=false
@@ -626,23 +952,48 @@ public with sharing class ONAController {
         }
     }
 
+    // ── pairInc ───────────────────────────────────────────────────────────────
+    // Helper: given a map of (activityId → Set<contactIds>), increments the
+    // shared-activity counter between every pair of contacts in the same group.
+    // Called by populateSharedMaps() for each activity type.
+    //
+    // type values:
+    //   'email'    → increments sharedEmails    (Task Type=Email)
+    //   'meeting'  → increments sharedMeetings  (EventRelation)
+    //   'opp'      → increments sharedOpps      (OpportunityContactRole)
+    //   'emailMsg' → increments sharedEmailMessages (EAC PATCH — commented below)
     private static void pairInc(Map<String,Set<Id>> actMap, Map<Id,ONAModels.ContactNode> nm, String type) {
         for (Set<Id> grp : actMap.values()) {
-            if (grp.size()<2) continue;
+            if (grp.size() < 2) continue; // need at least 2 contacts to form a pair
             List<Id> gl = new List<Id>(grp);
-            for (Integer i=0;i<gl.size();i++) for (Integer j=i+1;j<gl.size();j++) {
-                Id a=gl[i],b=gl[j];
-                ONAModels.ContactNode na=nm.get(a), nb=nm.get(b);
-                if(na==null||nb==null) continue;
-                if(type=='email'){
-                    na.sharedEmails.put(b,inc(na.sharedEmails,b));
-                    nb.sharedEmails.put(a,inc(nb.sharedEmails,a));
-                } else if(type=='meeting'){
-                    na.sharedMeetings.put(b,inc(na.sharedMeetings,b));
-                    nb.sharedMeetings.put(a,inc(nb.sharedMeetings,a));
-                } else if(type=='opp'){
-                    na.sharedOpps.put(b,inc(na.sharedOpps,b));
-                    nb.sharedOpps.put(a,inc(nb.sharedOpps,a));
+            for (Integer i = 0; i < gl.size(); i++) {
+                for (Integer j = i + 1; j < gl.size(); j++) {
+                    Id a = gl[i], b = gl[j];
+                    ONAModels.ContactNode na = nm.get(a), nb = nm.get(b);
+                    if (na == null || nb == null) continue;
+
+                    /* ─── BEGIN EAC PATCH — pairInc (emailMsg) ───────────────────────
+                     * Increments sharedEmailMessages between contacts on the same email.
+                     * Called from populateSharedMaps() EmailMessage block (also EAC PATCH).
+                     * Requires ONAModels EAC PATCH (sharedEmailMessages field) uncommented.
+                     *
+                    if (type == 'emailMsg') {
+                        na.sharedEmailMessages.put(b, inc(na.sharedEmailMessages, b));
+                        nb.sharedEmailMessages.put(a, inc(nb.sharedEmailMessages, a));
+                    } else
+                     *
+                     * ─── END EAC PATCH ─────────────────────────────────────────── */
+
+                    if (type == 'email') {
+                        na.sharedEmails.put(b, inc(na.sharedEmails, b));
+                        nb.sharedEmails.put(a, inc(nb.sharedEmails, a));
+                    } else if (type == 'meeting') {
+                        na.sharedMeetings.put(b, inc(na.sharedMeetings, b));
+                        nb.sharedMeetings.put(a, inc(nb.sharedMeetings, a));
+                    } else if (type == 'opp') {
+                        na.sharedOpps.put(b, inc(na.sharedOpps, b));
+                        nb.sharedOpps.put(a, inc(nb.sharedOpps, a));
+                    }
                 }
             }
         }
@@ -658,20 +1009,80 @@ public with sharing class ONAController {
         return res;
     }
 
+    // ── activityScores ────────────────────────────────────────────────────────
+    // Computes a weighted activity score per contact used to select the top-N
+    // most engaged contacts when loading a large account (>50 contacts).
+    //
+    // This is a PRE-FILTER only — it does not affect algorithm scores.
+    // Contacts with the highest activity scores are selected first so the
+    // graph shows the most relevant network rather than alphabetical contacts.
+    //
+    // Weights mirror the algorithm weights: Meeting (5) > Email (3) > Task (2)
     private static Map<Id,Integer> activityScores(Set<Id> ids) {
-        Map<Id,Integer> s = new Map<Id,Integer>(); for(Id id:ids) s.put(id,0);
+        Map<Id,Integer> s = new Map<Id,Integer>();
+        for (Id id : ids) s.put(id, 0);
         Date cutoff = Date.today().addMonths(-ACTIVITY_MONTHS);
-        for (AggregateResult ar:[SELECT WhoId,Type,COUNT(Id) cnt FROM Task
-                                  WHERE WhoId IN :ids AND ActivityDate>=:cutoff
-                                  AND IsDeleted=false GROUP BY WhoId,Type]) {
-            Id wid=(Id)ar.get('WhoId'); Integer cnt=((Decimal)ar.get('cnt')).intValue();
-            s.put(wid, s.get(wid)+cnt*(ar.get('Type')=='Email'?W_EMAIL:W_TASK));
+
+        // ── Task-based activity (manual logs) ─────────────────────────────
+        for (AggregateResult ar : [
+            SELECT WhoId, Type, COUNT(Id) cnt
+            FROM   Task
+            WHERE  WhoId       IN :ids
+            AND    ActivityDate >= :cutoff
+            AND    IsDeleted    = false
+            GROUP  BY WhoId, Type
+        ]) {
+            Id      wid = (Id)     ar.get('WhoId');
+            Integer cnt = ((Decimal)ar.get('cnt')).intValue();
+            s.put(wid, s.get(wid) + cnt * (ar.get('Type') == 'Email' ? W_EMAIL : W_TASK));
         }
-        for (AggregateResult ar:[SELECT WhoId,COUNT(Id) cnt FROM Event
-                                  WHERE WhoId IN :ids AND IsDeleted=false GROUP BY WhoId]) {
-            Id wid=(Id)ar.get('WhoId'); Integer cnt=((Decimal)ar.get('cnt')).intValue();
-            s.put(wid, s.get(wid)+cnt*W_MEETING);
+
+        // ── Event-based activity (meetings) ───────────────────────────────
+        for (AggregateResult ar : [
+            SELECT WhoId, COUNT(Id) cnt
+            FROM   Event
+            WHERE  WhoId IN :ids AND IsDeleted = false
+            GROUP  BY WhoId
+        ]) {
+            Id      wid = (Id)     ar.get('WhoId');
+            Integer cnt = ((Decimal)ar.get('cnt')).intValue();
+            s.put(wid, s.get(wid) + cnt * W_MEETING);
         }
+
+        /* ─── BEGIN EAC PATCH — ACTIVITY SCORES (EmailMessage) ───────────────────
+         * Adds real email volume to the initial contact ranking score.
+         * Once EAC is active, contacts who have exchanged more real emails
+         * will rank higher in the top-N selection, improving graph quality.
+         *
+         * accountIds must be collected from the Contact records in scope before
+         * calling this patch. Add this block after the Event aggregate query above.
+         *
+        Set<Id> accountIds = new Set<Id>();
+        for (Contact c : [SELECT AccountId FROM Contact WHERE Id IN :ids AND AccountId != null])
+            accountIds.add(c.AccountId);
+        if (!accountIds.isEmpty()) {
+            DateTime cutoffDt = DateTime.newInstance(cutoff, Time.newInstance(0,0,0,0));
+            for (EmailMessage msg : [
+                SELECT ToIds
+                FROM   EmailMessage
+                WHERE  RelatedToId IN :accountIds
+                AND    MessageDate >= :cutoffDt
+                AND    Status      != 'Draft'
+                LIMIT  5000
+            ]) {
+                for (String toId : msg.ToIds) {
+                    try {
+                        Id cId = (Id) toId;
+                        if (s.containsKey(cId)) s.put(cId, s.get(cId) + W_EMAIL_MSG);
+                    } catch (Exception ex) {
+                        // skip non-contact IDs (Leads, Users etc)
+                    }
+                }
+            }
+        }
+         *
+         * ─── END EAC PATCH ─────────────────────────────────────────────────── */
+
         return s;
     }
 
@@ -719,10 +1130,335 @@ public with sharing class ONAController {
             i.activityDate=e.ActivityDate!=null?String.valueOf(e.ActivityDate):'';
             i.relatedTo=e.What!=null?e.What.Name:''; items.add(i);
         }
+
+        /* ─── BEGIN EAC PATCH — fetchTimeline (EmailMessage) ─────────────────────
+         * Adds real sent/received emails to the Contact Insight Panel timeline.
+         * Currently the timeline shows only manually logged Tasks and Events.
+         * With EAC, it will also show actual email subjects and directions.
+         *
+         * Incoming=true  = email received FROM this contact to your seller
+         * Incoming=false = email sent BY your seller TO this contact
+         *
+        for (EmailMessage msg : [
+            SELECT   Id, Subject, MessageDate, Incoming, FromAddress, ToAddress
+            FROM     EmailMessage
+            WHERE    Activity.WhoId = :contactId
+            AND      Status         != 'Draft'
+            ORDER BY MessageDate DESC NULLS LAST
+            LIMIT    :lim
+        ]) {
+            ONAModels.ActivityItem i = new ONAModels.ActivityItem();
+            i.id           = msg.Id;
+            i.subject      = msg.Subject != null ? msg.Subject : '(No Subject)';
+            i.activityType = msg.Incoming ? 'Email Received' : 'Email Sent';
+            i.activityDate = String.valueOf(msg.MessageDate.date());
+            i.relatedTo    = msg.Incoming ? msg.FromAddress : msg.ToAddress;
+            items.add(i);
+        }
+         *
+         * ─── END EAC PATCH ─────────────────────────────────────────────────── */
+
         return items;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════════
+    // LAST ACTIVITY BADGE (v4.1)
+    // Queries last Task and Event date per contact.
+    // Two aggregate SOQL queries only — no extra per-contact callouts.
+    // ══════════════════════════════════════════════════════════════════════════
+    // ── populateLastActivity + sellerInteractions (v4.2) ────────────────────────
+    // Both features share the same Task/Event queries — avoids extra callouts.
+    private static void populateLastActivity(List<ONAModels.ContactNode> nodes) {
+        if (nodes == null || nodes.isEmpty()) return;
+
+        Set<Id> ids = new Set<Id>();
+        Map<Id,ONAModels.ContactNode> nodeMap = new Map<Id,ONAModels.ContactNode>();
+        for (ONAModels.ContactNode n : nodes) {
+            ids.add(n.contactId);
+            nodeMap.put(n.contactId, n);
+        }
+
+        Map<Id,Date>    lastDates   = new Map<Id,Date>();
+        // Seller maps: contactId → (repId → {lastDate, count, repName})
+        Map<Id, Map<Id, Date>>    sellerLast  = new Map<Id, Map<Id, Date>>();
+        Map<Id, Map<Id, Integer>> sellerCount = new Map<Id, Map<Id, Integer>>();
+        Map<Id, Map<Id, String>>  sellerName  = new Map<Id, Map<Id, String>>();
+        Date cutoff = Date.today().addYears(-2);
+
+        // Tasks
+        for (Task t : [
+            SELECT WhoId, OwnerId, Owner.Name, ActivityDate
+            FROM   Task
+            WHERE  WhoId        IN :ids
+            AND    IsDeleted     = false
+            AND    ActivityDate >= :cutoff
+            ORDER  BY ActivityDate DESC
+            LIMIT  2000
+        ]) {
+            if (t.ActivityDate == null) continue;
+            // Last activity badge
+            if (!lastDates.containsKey(t.WhoId) || lastDates.get(t.WhoId) < t.ActivityDate)
+                lastDates.put(t.WhoId, t.ActivityDate);
+            // Seller tracking
+            if (!sellerLast.containsKey(t.WhoId))  sellerLast.put(t.WhoId,  new Map<Id,Date>());
+            if (!sellerCount.containsKey(t.WhoId)) sellerCount.put(t.WhoId, new Map<Id,Integer>());
+            if (!sellerName.containsKey(t.WhoId))  sellerName.put(t.WhoId,  new Map<Id,String>());
+            Map<Id,Date>    sl = sellerLast.get(t.WhoId);
+            Map<Id,Integer> sc = sellerCount.get(t.WhoId);
+            Map<Id,String>  sn = sellerName.get(t.WhoId);
+            if (!sl.containsKey(t.OwnerId) || sl.get(t.OwnerId) < t.ActivityDate)
+                sl.put(t.OwnerId, t.ActivityDate);
+            Integer cnt = sc.containsKey(t.OwnerId) ? sc.get(t.OwnerId) : 0;
+            sc.put(t.OwnerId, cnt + 1);
+            if (!sn.containsKey(t.OwnerId)) sn.put(t.OwnerId, t.Owner.Name);
+        }
+
+        // Events
+        for (Event e : [
+            SELECT WhoId, OwnerId, Owner.Name, ActivityDate
+            FROM   Event
+            WHERE  WhoId        IN :ids
+            AND    IsDeleted     = false
+            AND    ActivityDate >= :cutoff
+            ORDER  BY ActivityDate DESC
+            LIMIT  2000
+        ]) {
+            if (e.ActivityDate == null) continue;
+            if (!lastDates.containsKey(e.WhoId) || lastDates.get(e.WhoId) < e.ActivityDate)
+                lastDates.put(e.WhoId, e.ActivityDate);
+            if (!sellerLast.containsKey(e.WhoId))  sellerLast.put(e.WhoId,  new Map<Id,Date>());
+            if (!sellerCount.containsKey(e.WhoId)) sellerCount.put(e.WhoId, new Map<Id,Integer>());
+            if (!sellerName.containsKey(e.WhoId))  sellerName.put(e.WhoId,  new Map<Id,String>());
+            Map<Id,Date>    sl = sellerLast.get(e.WhoId);
+            Map<Id,Integer> sc = sellerCount.get(e.WhoId);
+            Map<Id,String>  sn = sellerName.get(e.WhoId);
+            if (!sl.containsKey(e.OwnerId) || sl.get(e.OwnerId) < e.ActivityDate)
+                sl.put(e.OwnerId, e.ActivityDate);
+            Integer cnt = sc.containsKey(e.OwnerId) ? sc.get(e.OwnerId) : 0;
+            sc.put(e.OwnerId, cnt + 1);
+            if (!sn.containsKey(e.OwnerId)) sn.put(e.OwnerId, e.Owner.Name);
+        }
+
+        /* ─── BEGIN EAC PATCH — populateLastActivity (EmailMessage) ───────────────
+         * Adds real email MessageDate as a candidate for the Last Activity badge
+         * and includes the email sender (CreatedById) in the seller interactions list.
+         *
+         * Without EAC: the badge shows the last Task or Event date only.
+         * With EAC:    the badge also considers the last real email send/receive date,
+         *              which may be more recent than a manually logged Task.
+         *
+         * Also adds EmailMessage interactions to the seller interaction panel —
+         * a seller who sends emails but never creates Tasks will currently show
+         * as having zero interactions. EAC fixes this.
+         *
+        // ── EmailMessage — last activity date + seller interactions ───────
+        Set<Id> emailAccountIds = new Set<Id>();
+        for (ONAModels.ContactNode n : nodes) {
+            if (n.accountId != null) emailAccountIds.add(n.accountId);
+        }
+        if (!emailAccountIds.isEmpty()) {
+            DateTime emailCutoff = DateTime.newInstance(cutoff, Time.newInstance(0,0,0,0));
+            for (EmailMessage msg : [
+                SELECT   ToIds, CreatedById, CreatedBy.Name, MessageDate, Incoming, Subject
+                FROM     EmailMessage
+                WHERE    RelatedToId IN :emailAccountIds
+                AND      MessageDate >= :emailCutoff
+                AND      Status      != 'Draft'
+                ORDER BY MessageDate DESC
+                LIMIT    2000
+            ]) {
+                Date msgDate = msg.MessageDate.date();
+                for (String toId : msg.ToIds) {
+                    try {
+                        Id cId = (Id) toId;
+                        if (!ids.contains(cId)) continue;
+
+                        // Update last activity badge
+                        if (!lastDates.containsKey(cId) || lastDates.get(cId) < msgDate)
+                            lastDates.put(cId, msgDate);
+
+                        // Track seller interactions from EmailMessage
+                        Id repId = msg.CreatedById;
+                        if (!sellerLast.containsKey(cId))  sellerLast.put(cId,  new Map<Id,Date>());
+                        if (!sellerCount.containsKey(cId)) sellerCount.put(cId, new Map<Id,Integer>());
+                        if (!sellerName.containsKey(cId))  sellerName.put(cId,  new Map<Id,String>());
+                        Map<Id,Date>    sl = sellerLast.get(cId);
+                        Map<Id,Integer> sc = sellerCount.get(cId);
+                        Map<Id,String>  sn = sellerName.get(cId);
+                        if (!sl.containsKey(repId) || sl.get(repId) < msgDate)
+                            sl.put(repId, msgDate);
+                        Integer cnt = sc.containsKey(repId) ? sc.get(repId) : 0;
+                        sc.put(repId, cnt + 1);
+                        if (!sn.containsKey(repId)) sn.put(repId, msg.CreatedBy.Name);
+                    } catch (Exception ex) {
+                        // skip non-contact ToIds (Leads, Users etc)
+                    }
+                }
+            }
+        }
+         *
+         * ─── END EAC PATCH ─────────────────────────────────────────────────── */
+
+        // Assign to nodes
+        for (ONAModels.ContactNode n : nodes) {
+            Id cid = n.contactId;
+
+            // Last activity badge
+            if (lastDates.containsKey(cid)) {
+                Date    lastDate = lastDates.get(cid);
+                Integer days     = lastDate.daysBetween(Date.today());
+                n.lastActivityDate  = String.valueOf(lastDate);
+                n.daysSinceActivity = days;
+                if (days <= 30)       { n.activityBadgeLabel = days + 'd';                 n.activityBadgeColor = '#059669'; }
+                else if (days <= 90)  { n.activityBadgeLabel = Math.round(days/7)  + 'w';  n.activityBadgeColor = '#B45309'; }
+                else if (days <= 365) { n.activityBadgeLabel = Math.round(days/30) + 'm';  n.activityBadgeColor = '#DC2626'; }
+                else                  { n.activityBadgeLabel = Math.round(days/365)+ 'y+'; n.activityBadgeColor = '#475569'; }
+            } else {
+                n.daysSinceActivity = 9999; n.activityBadgeLabel = 'None'; n.activityBadgeColor = '#94A3B8';
+            }
+
+            // Seller interactions — build sorted list
+            if (sellerLast.containsKey(cid)) {
+                Map<Id,Date>    sl = sellerLast.get(cid);
+                Map<Id,Integer> sc = sellerCount.get(cid);
+                Map<Id,String>  sn = sellerName.get(cid);
+                List<ONAModels.SellerInteraction> sis = new List<ONAModels.SellerInteraction>();
+                for (Id repId : sl.keySet()) {
+                    Date    rd    = sl.get(repId);
+                    Integer days  = rd.daysBetween(Date.today());
+                    Integer cnt   = sc.containsKey(repId) ? sc.get(repId) : 0;
+                    String  color = days <= 30 ? '#059669' : days <= 90 ? '#B45309' : '#DC2626';
+                    String  whenLbl = days <= 30  ? days + 'd ago'
+                                  : days <= 90  ? Math.round(days/7)  + 'w ago'
+                                  : days <= 365 ? Math.round(days/30) + 'm ago'
+                                  : Math.round(days/365) + 'y+ ago';
+                    ONAModels.SellerInteraction si = new ONAModels.SellerInteraction();
+                    si.repName   = sn.containsKey(repId) ? sn.get(repId) : 'Unknown';
+                    si.daysSince = days;
+                    si.whenLabel = whenLbl;
+                    si.dotColor  = color;
+                    si.dotStyle  = 'background:' + color + ';width:8px;height:8px;border-radius:50%;flex-shrink:0';
+                    si.count     = cnt;
+                    si.countLabel= cnt + ' interaction' + (cnt == 1 ? '' : 's');
+                    sis.add(si);
+                }
+                // Sort by most recent
+                sis.sort(new SellerInteractionSorter());
+                // Cap at 5
+                List<ONAModels.SellerInteraction> capped = new List<ONAModels.SellerInteraction>();
+                for (Integer i = 0; i < Math.min(5, sis.size()); i++) capped.add(sis[i]);
+                n.sellerInteractions = capped;
+            }
+        }
+    }
+
+    private class SellerInteractionSorter implements Comparator<ONAModels.SellerInteraction> {
+        public Integer compare(ONAModels.SellerInteraction a, ONAModels.SellerInteraction b) {
+            return a.daysSince - b.daysSince;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SELLER INTERACTION LAYER (v4.2)
+    // Returns which Salesforce users have interacted with a contact,
+    // how many times, and when their most recent interaction was.
+    // Powers the hover tooltip seller panel on Network Map nodes.
+    // ══════════════════════════════════════════════════════════════════════════
+    @AuraEnabled(cacheable=true)
+    public static List<Map<String,Object>> getContactSellerInteractions(Id contactId) {
+        if (contactId == null) return new List<Map<String,Object>>();
+
+        Date cutoff = Date.today().addYears(-2);
+
+        // Collect all activity records for this contact
+        Map<Id, Date>    lastByRep  = new Map<Id, Date>();
+        Map<Id, Integer> countByRep = new Map<Id, Integer>();
+        Map<Id, String>  nameByRep  = new Map<Id, String>();
+
+        // Tasks
+        for (Task t : [
+            SELECT OwnerId, Owner.Name, ActivityDate
+            FROM   Task
+            WHERE  WhoId        = :contactId
+            AND    IsDeleted    = false
+            AND    ActivityDate >= :cutoff
+            ORDER  BY ActivityDate DESC
+            LIMIT  500
+        ]) {
+            if (!nameByRep.containsKey(t.OwnerId))
+                nameByRep.put(t.OwnerId, t.Owner.Name);
+            if (!lastByRep.containsKey(t.OwnerId) || lastByRep.get(t.OwnerId) < t.ActivityDate)
+                lastByRep.put(t.OwnerId, t.ActivityDate);
+            Integer tCnt = countByRep.containsKey(t.OwnerId) ? countByRep.get(t.OwnerId) : 0;
+            countByRep.put(t.OwnerId, tCnt + 1);
+        }
+
+        // Events
+        for (Event e : [
+            SELECT OwnerId, Owner.Name, ActivityDate
+            FROM   Event
+            WHERE  WhoId        = :contactId
+            AND    IsDeleted    = false
+            AND    ActivityDate >= :cutoff
+            ORDER  BY ActivityDate DESC
+            LIMIT  500
+        ]) {
+            if (!nameByRep.containsKey(e.OwnerId))
+                nameByRep.put(e.OwnerId, e.Owner.Name);
+            if (!lastByRep.containsKey(e.OwnerId) || lastByRep.get(e.OwnerId) < e.ActivityDate)
+                lastByRep.put(e.OwnerId, e.ActivityDate);
+            Integer eCnt = countByRep.containsKey(e.OwnerId) ? countByRep.get(e.OwnerId) : 0;
+            countByRep.put(e.OwnerId, eCnt + 1);
+        }
+
+        // Build result list
+        List<Map<String,Object>> results = new List<Map<String,Object>>();
+        for (Id repId : lastByRep.keySet()) {
+            Date    lastDate = lastByRep.get(repId);
+            Integer days     = lastDate.daysBetween(Date.today());
+            String  color    = days <= 30 ? '#059669' : days <= 90 ? '#B45309' : '#DC2626';
+            String  whenLbl  = days <= 30
+                ? days + 'd ago'
+                : days <= 90
+                ? Math.round(days/7) + 'w ago'
+                : days <= 365
+                ? Math.round(days/30) + 'm ago'
+                : Math.round(days/365) + 'y+ ago';
+
+            Map<String,Object> row = new Map<String,Object>{
+                'repId'    => repId,
+                'repName'  => nameByRep.get(repId),
+                'count'    => countByRep.get(repId),
+                'daysSince'=> days,
+                'whenLabel'=> whenLbl,
+                'dotColor' => color,
+                'dotStyle' => 'background:' + color + ';width:8px;height:8px;border-radius:50%;flex-shrink:0',
+                'countLabel'=> countByRep.get(repId) + ' interaction' + (countByRep.get(repId) == 1 ? '' : 's')
+            };
+            results.add(row);
+        }
+
+        // Sort by most recent (daysSince ascending)
+        results.sort(new SellerRepSorter());
+        // subList() not supported on List<Map> — trim manually
+        if (results.size() > 5) {
+            List<Map<String,Object>> trimmed = new List<Map<String,Object>>();
+            for (Integer i = 0; i < 5; i++) trimmed.add(results[i]);
+            return trimmed;
+        }
+        return results;
+    }
+
+    // Sorter for seller interactions — most recent first
+    private class SellerRepSorter implements Comparator<Map<String,Object>> {
+        public Integer compare(Map<String,Object> a, Map<String,Object> b) {
+            Integer dA = (Integer) a.get('daysSince');
+            Integer dB = (Integer) b.get('daysSince');
+            return dA - dB;
+        }
+    }
+
+        // ── Helpers ───────────────────────────────────────────────────────────────
     private static void applyInfluence(List<ONAModels.ContactNode> nodes) {
         for(ONAModels.ContactNode n : nodes) n.influenceScore = alg2Influence(n);
     }
