@@ -1,0 +1,32 @@
+<template>
+    <span class="ona-ht-wrap"
+          onmouseenter={handleShow}
+          onmouseleave={handleHide}
+          onfocusin={handleShow}
+          onfocusout={handleHide}>
+
+        <button class="ona-ht-btn"
+                aria-label={ariaLabel}
+                type="button"
+                lwc:ref="btn">?</button>
+
+    </span>
+
+    <!-- Tooltip rendered as fixed-position div — escapes overflow:hidden parents -->
+    <template if:true={visible}>
+        <div class="ona-ht-portal"
+             style={portalStyle}
+             onmouseenter={handleShow}
+             onmouseleave={handleHide}
+             role="tooltip">
+            <div class="ona-ht-title">{title}</div>
+            <div class="ona-ht-body">{body}</div>
+            <template if:true={sellerTip}>
+                <div class="ona-ht-seller">
+                    <span class="ona-ht-seller-ico">💡</span>
+                    <span class="ona-ht-seller-text">{sellerTip}</span>
+                </div>
+            </template>
+        </div>
+    </template>
+</template>

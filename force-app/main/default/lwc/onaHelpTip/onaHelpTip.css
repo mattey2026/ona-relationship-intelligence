@@ -1,0 +1,153 @@
+/* ============================================================
+   onaHelpTip — Help icon + fixed-position tooltip
+   All font/colour tokens inherited from the host app via
+   CSS custom properties. No !important rules needed because
+   this component's styles are scoped by LWC shadow DOM.
+   ============================================================ */
+
+:host {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+}
+
+/* ── The ? button ────────────────────────────────────────── */
+.ona-ht-wrap {
+    display: inline-flex;
+    align-items: center;
+}
+
+.ona-ht-btn {
+    /* Fixed size — never inherits parent font-size or caps */
+    width:          15px;
+    height:         15px;
+    min-width:      15px;
+    flex-shrink:    0;
+    border-radius:  50%;
+    border:         1px solid rgba(0,0,0,.22);
+    background:     #f1f5f9;
+    color:          #94a3b8;
+    /* Explicit font reset — prevents caps, size bleed from parent */
+    font-size:      9px;
+    font-weight:    700;
+    font-family:    'Salesforce Sans', Arial, sans-serif;
+    text-transform: none;
+    letter-spacing: 0;
+    line-height:    1;
+    cursor:         pointer;
+    display:        inline-flex;
+    align-items:    center;
+    justify-content:center;
+    padding:        0;
+    margin-left:    4px;
+    transition:     background .12s, border-color .12s, color .12s;
+    vertical-align: middle;
+}
+
+.ona-ht-btn:hover,
+.ona-ht-btn:focus {
+    background:   #b45309;
+    border-color: #b45309;
+    color:        #ffffff;
+    outline:      none;
+}
+
+/* ── Tooltip portal — positioned fixed by JS ─────────────── */
+.ona-ht-portal {
+    /* Layout */
+    display:        flex;
+    flex-direction: column;
+    gap:            8px;
+    padding:        13px 15px;
+    /* Visual */
+    background:     #ffffff;
+    border:         1px solid rgba(0,0,0,.14);
+    border-radius:  10px;
+    box-shadow:     0 8px 28px rgba(0,0,0,.14), 0 1px 4px rgba(0,0,0,.08);
+    /* Font reset — critical: prevents any parent style leaking in */
+    font-family:    'Salesforce Sans', Arial, sans-serif;
+    font-size:      12px;
+    font-weight:    400;
+    text-transform: none;
+    letter-spacing: 0;
+    color:          #475569;
+    line-height:    1;
+    /* Animation */
+    animation:      ona-ht-in .12s ease;
+}
+
+@keyframes ona-ht-in {
+    from { opacity:0; transform:translateY(3px); }
+    to   { opacity:1; transform:translateY(0);   }
+}
+
+/* Dark mode — match ONA's dark tokens */
+@media (prefers-color-scheme: dark) {
+    .ona-ht-portal {
+        background:  #0d111c;
+        border-color:rgba(255,255,255,.13);
+        box-shadow:  0 8px 28px rgba(0,0,0,.4);
+        color:       #94a3b8;
+    }
+    .ona-ht-title { color: #f0f4ff; }
+    .ona-ht-seller { background: rgba(240,180,41,.06); border-color: rgba(240,180,41,.18); }
+    .ona-ht-seller-text { color: #f0f4ff; }
+    .ona-ht-btn { background:#131929; border-color:rgba(255,255,255,.22); color:#4a5568; }
+    .ona-ht-btn:hover,.ona-ht-btn:focus { background:#f0b429; border-color:#f0b429; color:#000; }
+}
+
+/* ── Tooltip content ─────────────────────────────────────── */
+.ona-ht-title {
+    /* Explicit resets */
+    font-family:    'Salesforce Sans', Arial, sans-serif;
+    font-size:      12px;
+    font-weight:    600;
+    text-transform: none;
+    letter-spacing: 0;
+    color:          #0f172a;
+    line-height:    1.4;
+    padding-bottom: 7px;
+    border-bottom:  1px solid rgba(0,0,0,.08);
+    display:        block;
+}
+
+.ona-ht-body {
+    font-family:    'Salesforce Sans', Arial, sans-serif;
+    font-size:      11.5px;
+    font-weight:    400;
+    text-transform: none;
+    letter-spacing: 0;
+    color:          #475569;
+    line-height:    1.65;
+    display:        block;
+}
+
+/* Seller tip — the "what to do" action */
+.ona-ht-seller {
+    display:       flex;
+    gap:           7px;
+    align-items:   flex-start;
+    padding:       8px 9px;
+    background:    rgba(180,83,9,.06);
+    border:        1px solid rgba(180,83,9,.16);
+    border-radius: 7px;
+    margin-top:    2px;
+}
+
+.ona-ht-seller-ico {
+    font-size:  12px;
+    flex-shrink:0;
+    margin-top: 1px;
+    /* Prevent icon from inheriting parent text transforms */
+    font-style: normal;
+}
+
+.ona-ht-seller-text {
+    font-family:    'Salesforce Sans', Arial, sans-serif;
+    font-size:      11px;
+    font-weight:    400;
+    text-transform: none;
+    letter-spacing: 0;
+    color:          #0f172a;
+    line-height:    1.55;
+}

@@ -23,10 +23,17 @@ import { NavigationMixin } from 'lightning/navigation';
 import D3 from '@salesforce/resourceUrl/d3';
 
 import getAccountGraph      from '@salesforce/apex/ONAController.getAccountGraph';
+import getScoreTrend        from '@salesforce/apex/ONAScoreHistoryController.getTrend';
 import getCrossAccountGraph from '@salesforce/apex/ONAController.getCrossAccountGraph';
 import getContactInsight    from '@salesforce/apex/ONAController.getContactInsight';
 import getAccountNews       from '@salesforce/apex/ONAController.getAccountNews';
-import searchAccounts       from '@salesforce/apex/ONAController.searchAccounts';
+import getABMBubbleData    from '@salesforce/apex/ONAController.getABMBubbleData';
+import searchAccounts               from '@salesforce/apex/ONAController.searchAccounts';
+import searchAccountsAndContacts   from '@salesforce/apex/ONAController.searchAccountsAndContacts';
+
+import getRecentCampaigns    from '@salesforce/apex/ONACampaignController.getRecentCampaigns';
+import createCampaign        from '@salesforce/apex/ONACampaignController.createCampaign';
+import addContactsToCampaign from '@salesforce/apex/ONACampaignController.addContactsToCampaign';
 
 const PAL = {
     light: { hub:'#b45309', connector:'#0369a1', bridge:'#4338ca', low:'#94a3b8', hl:'#b45309', lbl:'rgba(15,23,42,.70)' },
@@ -46,88 +53,137 @@ const COUNTRY_NAMES = {
 const GUIDE_STEPS = [
     {
         title: 'Welcome to ONA Relationship Intelligence',
-        body:  'ONA maps the real communication graph inside your Salesforce accounts using 11 graph algorithms. See who knows whom, which relationships are at risk, and where your coverage gaps are — all from CRM data already in your org.',
-        tip:   'This tour covers every view and feature. Use arrow keys or buttons to navigate.',
+        body:  'ONA maps the real communication network inside your Salesforce accounts using 11 graph algorithms. See who knows whom, which relationships are cooling, where your coverage gaps are — and which champions are going quiet before it becomes a deal risk. All from CRM data already in your org.',
+        tip:   'This tour covers every view and feature built to date. Use the arrow buttons or keyboard to navigate.',
         zone:  null
     },
     {
-        title: 'View Selector — Five Ways to Explore',
-        body:  'Four cards at the top switch between views: Network Map (single account graph), Cross-Account (multiple accounts with bridge contacts), Portfolio View (health scores across all accounts), and Analytics (advanced graph intelligence with four sub-views).',
-        isNew: 'Analytics view is new — it contains Timeline, Power Map, Impact Simulator and Risk Radar.',
+        title: 'Five Ways to Explore',
+        body:  'The view selector switches between: Network Map (single account graph), Cross-Account (multiple accounts with bridge contacts), Portfolio View (health scores across your territory), Analytics (four advanced sub-views: Timeline, Power Map, Impact Simulator, Risk Radar), and Compare (side-by-side account intelligence).',
+        tip:   'Start with Network Map for any account, then use Portfolio View to spot which accounts need the most attention this week.',
         zone:  '.ona-view-cards'
     },
     {
-        title: 'Search and Load an Account',
-        body:  'Type any account name in the search box. A dropdown shows matching accounts from your Salesforce org. Click any result to load the full relationship network for that account.',
-        tip:   'Click the search box — accounts appear immediately as you type.',
+        title: 'Search — Accounts and Contacts Together',
+        body:  'One search box finds both accounts and contacts simultaneously. Selecting an account loads its full relationship network. Selecting a contact loads their account graph and automatically zooms in to spotlight that person — fading all others so you can instantly see their scores, connections and team interactions.',
+        tip:   'Contact rows show a blue left border in the dropdown to distinguish them from accounts.',
+        isNew: 'Search now covers both accounts and contacts — one box, two result types.',
         zone:  '.ona-search-wrap'
     },
     {
         title: 'Smart Filters — Dynamic and Combinable',
-        body:  'Filter chips populate automatically from the loaded data. Only countries, regions and departments that exist in the current account appear. Filters combine — select India + Engineering to isolate just that segment. Clears on every new account load.',
+        body:  'Filter chips populate automatically from the loaded account data. Only countries, regions and departments that actually exist appear. Filters combine — select India + Engineering to isolate just that segment. Clears automatically on every new account load.',
         isNew: 'Filters update the graph instantly without an Apex callout.',
         zone:  '.ona-filter-chips'
     },
     {
         title: 'Network Metrics',
-        body:  'Four live counts: Contacts loaded, Relationship edges (shared CRM activity), Hub nodes (centrality above 70), and Clusters (separate buying groups detected by Union-Find algorithm). These four numbers describe the shape of the account at a glance.',
+        body:  'Four live counts: Contacts mapped, Relationship edges (shared CRM activity), Hub nodes (centrality above 70), and Clusters (separate buying groups detected by the Union-Find algorithm). Hover the ? icon next to each term for a plain-English explanation of what it means and what action to take.',
+        isNew: 'Help tips: every technical term now has a ? icon. Hover it to see a seller-friendly explanation plus a specific action tip.',
         zone:  '.ona-kgrid'
     },
     {
-        title: 'Account Intelligence — Coverage and Multi-thread',
-        body:  'Coverage Score measures how broadly you are engaged across departments and seniority levels. Multi-thread Risk shows how concentrated your activity is — low score means one contact controls everything. Whitespace lists departments with no CRM activity logged.',
-        isNew: 'Algorithms 9, 10 and 11 running on live Salesforce data. Updates every time you load an account.',
+        title: 'Account Intelligence — Coverage, Multi-Thread and Whitespace',
+        body:  'Coverage Score measures how broadly your team is engaged across departments and seniority levels. Multi-Thread Risk shows how concentrated your activity is — low score means one contact controls everything. Whitespace lists departments with fewer than three meaningful interactions. Trend lines under each score show how they have changed over recent weeks.',
+        isNew: 'Score History Trending: Coverage and Multi-Thread now show a trend line (e.g. ↑ +13% vs 3 months ago) powered by a nightly snapshot job. Green = improving, red = declining.',
         zone:  '.ona-lps'
     },
     {
         title: 'Q1–Q5 Insight Filters',
-        body:  'Five one-click highlight modes that fade out irrelevant contacts. Q1 shows all connections. Q2 highlights the most influential. Q3 highlights communication hubs. Q4 surfaces high-value contacts not yet reached. Q5 — the most powerful — highlights only contacts with growing engagement momentum right now.',
-        isNew: 'Q5 Velocity: compares last 90 days vs prior 90 days of email and meeting activity. Green = growing.',
+        body:  'Five one-click highlight modes that fade irrelevant contacts. Q1 shows all connections. Q2 highlights the most influential. Q3 highlights communication hubs. Q4 surfaces high-value contacts not yet reached. Q5 — the most powerful — highlights only contacts with growing engagement momentum right now.',
+        tip:   'Use Q5 at the start of every account review to immediately see who is gaining momentum and who is fading.',
+        isNew: 'Q5 Velocity: compares last 90 days vs prior 90 days of CRM activity. Green = growing.',
         zone:  '.ona-lps'
     },
     {
         title: 'The Relationship Graph',
-        body:  'Gold nodes with a glow ring are Hubs — the information brokers. Blue are Connectors. Grey are Low Engagement. The arrow below each name shows velocity. Edge thickness shows relationship strength — thick gold = Strong (15+), dashed = Weak. Click any node to explore.',
-        tip:   'Drag nodes to reposition. Scroll to zoom. Click canvas to reset highlights.',
+        body:  'Gold nodes with a glow ring are Hubs — the information brokers who connect otherwise separate groups. Blue are Connectors. Grey are Low Engagement contacts. The arrow below each name shows velocity. Edge thickness shows relationship strength. Drag nodes to reposition, scroll to zoom, click canvas to reset highlights.',
+        tip:   'Thick gold edge = Strong (15+ shared interactions). Dashed edge = Weak connection.',
         zone:  '.ona-garea'
     },
     {
-        title: 'Contact Insight Panel',
-        body:  'Clicking any node opens the right panel: four ONA score cards (Influence, Centrality, Decay, Betweenness), velocity trend, warm introduction paths showing the exact 2-3 hop route to unconnected contacts, activity summary, recent timeline, and ranked next-engagement recommendations.',
-        isNew: 'Warm Intro Paths use BFS to find the shortest introduction route — not just a path exists but the specific name to ask.',
+        title: '⚠ Champion Risk — Early Warning on Nodes',
+        body:  'A pulsing red ring and small ⚠ badge on a contact node means that person is a Champion Risk — they are in the top tier of influence for this account but their engagement is now cooling. This signal typically appears 60–90 days before it shows up as a visible pipeline problem.',
+        tip:   'Hover a flagged node to see the exact reason in the tooltip. No Task is created — this signal lives only inside ONA so your activity log stays clean.',
+        isNew: 'Champion Risk is computed live on every graph load using relative influence ranking (top 40% per account), so it self-calibrates regardless of account size.',
+        zone:  '.ona-garea'
+    },
+    {
+        title: 'Data Completeness Badges',
+        body:  'A small badge appears on the top-right corner of each node. Green ✓ means Phone or Mobile, Email, and Title are all on file. Amber ! means some details are missing. No badge means the contact record has none of these fields. Contacts with incomplete data produce less reliable ONA scores — the badge is a quick trust signal.',
+        tip:   'Click any node to see exactly which fields are present or missing in the Contact Details section of the insight panel.',
+        isNew: 'Completeness is checked live against the Salesforce contact record each time the graph loads.',
+        zone:  '.ona-garea'
+    },
+    {
+        title: 'Contact Insight Panel — Full Details on Click',
+        body:  'Clicking any node opens the right panel. Contact Details at the top shows Phone, Mobile, Email and Title — click any card to copy the value to clipboard instantly. Below that: four ONA score cards (Influence, Centrality, Decay Score, Betweenness), Velocity Trend, Warm Introduction Paths, Activity Timeline, and Next Engagement Recommendations.',
+        tip:   'The colour-coded strip above the contact cards shows data quality at a glance: green = complete, amber = partial, grey = nothing on file.',
+        isNew: 'Contact Details redesigned as icon cards (📞 📱 📧 💼) with click-to-copy. Values come directly from the live Salesforce contact record.',
         zone:  '.ona-rpanel'
     },
     {
+        title: 'Team Interactions on Nodes',
+        body:  'Hover any node to see a tooltip showing ONA scores plus Team Interactions — which sellers from your org have contacted this person, how many times, and when their last interaction was. Colour-coded dots show recency: green = within 30 days, amber = 31–90 days, red = over 90 days.',
+        tip:   'If multiple sellers are engaging the same contact without knowing it, Team Interactions makes that visible immediately.',
+        isNew: 'Powered by Task and Event OwnerId data already in Salesforce — pre-loaded with the graph, zero extra callouts.',
+        zone:  '.ona-garea'
+    },
+    {
+        title: 'Add to Campaign — From the Header',
+        body:  'Click the 📢 icon next to the Bell in the header to open the Campaign panel. It slides in from the right without covering the graph. Cooling, Cold and Dark contacts are auto-selected instantly. Use the filter chips to refine, then add directly to an existing Salesforce Campaign or create a new one inline.',
+        tip:   'The Add button shows the live contact count so you always know exactly how many people you are targeting before committing.',
+        isNew: 'Campaign Creator v2: moved from the Analytics tab to a header icon — the network map stays visible behind the panel the whole time.',
+        zone:  '.ona-garea'
+    },
+    {
         title: 'Analytics — Timeline Slider',
-        body:  'The Timeline view replays how the account network evolved over the past 6 months. Drag the slider left to see the network as it was months ago — contacts appear or fade as the window changes. Coverage Score and edge count update live so you can see when engagement started growing or declining.',
-        isNew: 'The slider simulates historical network state using activity timestamps from your CRM data.',
+        body:  'The Timeline view in Analytics replays how the account network evolved over the past 6 months. Drag the slider left to see the network as it was months ago. Coverage Score and edge count update live so you can see when engagement started growing or declining.',
+        isNew: 'The slider simulates historical network state using activity timestamps already in your CRM data.',
         zone:  '.ona-view-cards'
     },
     {
         title: 'Analytics — Power Map',
-        body:  'Power Map positions contacts by organisational seniority — C-Level at top, VP/Director below, Manager, then Individual Contributors. Node size reflects the metric you choose (Influence, Centrality or Betweenness). Colour shows Velocity, Node type or Seniority. Edges show who is connected cross-hierarchy.',
+        body:  'Power Map positions contacts by seniority — C-Level at top, VP/Director below, Manager, then Individual Contributors. Node size reflects the metric you choose (Influence, Centrality or Betweenness). Colour shows Velocity, node type or seniority.',
         tip:   'Set Size to Influence and Colour to Velocity to instantly see your most influential growing contacts.',
         zone:  '.ona-view-cards'
     },
     {
         title: 'Analytics — Impact Simulator',
-        body:  'Select any contact and simulate what happens when they leave or become unresponsive. The graph removes them and redraws. The side panel shows a before/after comparison: Coverage, Multi-thread Risk, edges removed, and which contacts become isolated. Hub nodes trigger a high-risk warning.',
-        isNew: 'This answers the question: if my champion leaves, what breaks? Use it before renewals or QBRs.',
+        body:  'Select any contact and simulate what happens when they leave or go unresponsive. The graph redraws without them. The panel shows before-and-after: Coverage Score, Multi-Thread Risk, edges removed, and which contacts become isolated. Hub nodes trigger a high-risk warning.',
+        tip:   'Use this before renewals or QBRs to answer: if my champion leaves, what breaks?',
+        isNew: 'This answers the question your leadership will ask six months after the churn — ask it now instead.',
         zone:  '.ona-view-cards'
     },
     {
         title: 'Analytics — Risk Radar',
-        body:  'Risk Radar overlays risk signals on the network graph. At-risk contacts glow with a coloured dashed ring and are highlighted at full opacity — others fade. Filter by: Single-point-of-failure (controls 35%+ of activity), Relationship decay (score below 35), or No CRM activity (zero logged interactions).',
-        isNew: 'Click any highlighted node in the graph to jump to its entry in the risk list on the right.',
+        body:  'Risk Radar overlays risk signals on the network graph. At-risk contacts glow with a coloured ring at full opacity while others fade. Filter by: Single-point-of-failure (controls 35%+ of activity), Relationship Decay (score below 35), or Dark contacts (zero logged CRM interactions).',
+        tip:   'Click any highlighted node to jump to its entry in the risk list on the right.',
         zone:  '.ona-view-cards'
     },
     {
-        title: 'Portfolio View and External Signals',
-        body:  'Portfolio View ranks all your accounts by Coverage Score with dual progress bars per row. Click any account to see its full health detail, relationship scores, top contacts by influence, and live external news signals fetched from GNews API — partnerships, acquisitions, leadership changes.',
+        title: 'Portfolio View — Territory Health at a Glance',
+        body:  'Portfolio View ranks all your accounts by Coverage Score with dual progress bars per row. Click any account to see full health detail, top contacts by influence, and live external news signals — partnerships, acquisitions, leadership changes fetched from GNews.',
+        tip:   'Use Portfolio View at the start of every weekly review to instantly spot which accounts have the lowest coverage and the highest risk.',
         isNew: 'The Relationship Summary bell icon gives a consolidated popup of any loaded account without leaving the current view.',
         zone:  '.ona-view-cards'
     },
+    {
+        title: 'Compare View — Side-by-Side Account Intelligence',
+        body:  'Compare lets you select any two accounts and see their relationship health side by side. Six sections run in parallel: Network Size, Relationship Scores (Coverage and Multi-Thread with a Winner badge), Engagement Velocity breakdown, Top Influencers, and Risk Signals. The healthier account gets a gold border.',
+        tip:   'Use Compare before a QBR to show which accounts need the most relationship investment this quarter.',
+        isNew: 'Loads live data from both accounts simultaneously — no pre-configuration needed.',
+        zone:  '.ona-view-cards'
+    },
+    {
+        title: 'Score History — Trends Build Nightly',
+        body:  'ONA runs a nightly snapshot job that records each account\'s Coverage Score, Multi-Thread Risk, contact count, average Decay Score, whitespace gaps and cooling contact count. These snapshots power the trend lines under Account Intelligence. The longer ONA runs, the more meaningful the trends become.',
+        tip:   'Check back after a few weeks — you will start seeing which accounts are quietly improving their relationship health and which are silently declining.',
+        isNew: 'All snapshots stored in the ONA Score History custom object. Nightly scheduler runs at 2 AM and is already active in your org.',
+        zone:  null
+    },
 ];
+
 
 export default class OnaRelationshipMap extends NavigationMixin(LightningElement) {
 
@@ -147,7 +203,9 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
     @track hlMode   = 'connections';
 
     // Search
-    @track searchTerm     = '';
+    @track searchTerm          = '';
+    @track searchResults       = [];   // unified account+contact results
+    _contactToHighlight        = null; // contactId to focus after account loads
     @track accountResults = [];
     @track showDropdown   = false;
     @track selectedAcctId;
@@ -187,6 +245,7 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
 
     // Portfolio view
     @track portfolioAccounts  = [];
+    @track portSubTab         = 'list'; // 'list' | 'abm'
     @track portfolioStats     = { total:0, atRisk:0, healthy:0 };
     @track selectedAccount    = null;
     @track hasPortfolioSelected = false;
@@ -194,6 +253,19 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
     // News signals
     @track accountNews  = [];
     @track newsLoading  = false;
+
+    // Account Comparison
+    @track compareSearchA  = '';
+    @track compareSearchB  = '';
+    @track cmpDropA        = [];
+    @track cmpDropB        = [];
+    @track hasCmpResults   = false;
+    @track cmpResults      = {};
+    _cmpDataA = null;
+    _cmpDataB = null;
+
+    // Last Activity Badge (v4.1)
+    @track showLastActivity = false;
 
     // Summary popup
     @track summaryOpen   = false;
@@ -226,6 +298,41 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
     // Guide
     @track guideOpen = false;
     @track guideStep = 0;
+
+
+    // Score History Trend
+    @track trendComparison = null;
+    @track trendPoints     = [];
+
+    // ABM Intelligence (v4.7)
+    @track abmLoading       = false;
+    @track abmAccounts      = [];
+    @track abmSelected      = null;
+    @track abmStats         = { total:0, ready:0, warming:0, atRisk:0, champRisk:0 };
+    @track abmTipVisible    = false;
+    @track abmTip           = {};
+    _abmRendered            = false;
+
+    // Campaign Creator
+    @track campPanelOpen        = false;
+    @track campMode             = 'existing';
+    @track campSelectedIds      = [];
+    @track campSelectedContacts = [];
+    @track existingCampaigns    = [];
+    @track campLoading          = false;
+    @track campPickedId         = '';
+    @track campPickedName       = '';
+    @track newCampName          = '';
+    @track newCampType          = 'Email';
+    @track newCampStart         = '';
+    @track newCampEnd           = '';
+    @track campMemberStatus     = 'Sent';
+    @track campLastAdded        = '';
+    @track campLastId           = '';
+    @track campDot              = false;
+    @track campAutoLabel        = '';
+    @track campActiveChips      = [];
+    _campNodeSel                = null;
 
     // Private D3 refs
     _d3Loaded    = false;
@@ -260,6 +367,8 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
     get themeIcon()       { return this.isDark ? '☀' : '☾'; }
     get isGlobal()        { return this.mode === 'global'; }
     get isNetworkMode()   { return this.mode === 'account' || this.mode === 'global'; }
+    // Compare mode is handled separately via isCompareMode getter
+    get hasAccountLoaded() { return !!(this._allNodes && this._allNodes.length > 0); }
     get isPortfolioMode() { return this.mode === 'portfolio'; }
     get hasResults()      { return this.accountResults.length > 0; }
     get hasConnections()  { return this.connList.length > 0; }
@@ -273,6 +382,16 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
     get glbCardClass() { return 'ona-vc-btn' + (this.mode==='global' ?' on':''); }
     get portCardClass()       { return 'ona-vc-btn' + (this.mode==='portfolio'?' on':''); }
     get analyticsCardClass()  { return 'ona-vc-btn' + (this.mode==='analytics'?' on':''); }
+    get compareCardClass()    { return 'ona-vc-btn' + (this.mode==='compare' ?' on':''); }
+    get portTabListClass()    { return 'ona-port-tab' + (this.portSubTab==='list'?' on':''); }
+    get portTabABMClass()     { return 'ona-port-tab' + (this.portSubTab==='abm'?' on':''); }
+    get portTabIslist()       { return this.portSubTab === 'list'; }
+    get portTabIsABM()        { return this.portSubTab === 'abm'; }
+    get abmTipClass()         { return 'ona-abm-tip' + (this.abmTipVisible?' v':''); }
+
+    get isCompareMode()       { return this.mode === 'compare'; }
+    get hasCmpDropA()         { return this.cmpDropA.length > 0; }
+    get hasCmpDropB()         { return this.cmpDropB.length > 0; }
     get isAnalyticsMode()     { return this.mode === 'analytics'; }
     get analyticsAcctLabel()  { return this._allNodes.length ? `Account: ${this.searchTerm||'Loaded'}` : 'Load an account in Network Map first'; }
     get anIsTimeline()  { return this.analyticsTab==='timeline'; }
@@ -290,6 +409,52 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
     get anTabPowermap() { return 'ona-an-navbtn'+(this.analyticsTab==='powermap'?' on':''); }
     get anTabCascade()  { return 'ona-an-navbtn'+(this.analyticsTab==='cascade' ?' on':''); }
     get anTabRisk()     { return 'ona-an-navbtn'+(this.analyticsTab==='risk'    ?' on':''); }
+    get anTabCampaign() { return 'ona-an-navbtn'+(this.analyticsTab==='campaign'?' on':''); }
+    get anIsCampaign()       { return this.analyticsTab==='campaign'; }
+    get hasCampaignGraphData(){ return !!(this._allNodes && this._allNodes.length > 0); }
+    get hasCampSelected()      { return this.campSelectedContacts.length > 0; }
+
+    // Score History Trend getters
+    get trendHasHistory() { return !!(this.trendComparison && this.trendComparison.hasHistory); }
+
+    get covTrendLabel() {
+        if (!this.trendHasHistory) return '';
+        const d = this.trendComparison.coverageDelta;
+        const sign = d > 0 ? '+' : '';
+        const arrow = d > 0 ? '↑' : d < 0 ? '↓' : '→';
+        return `${arrow} ${sign}${d}% vs ${this.trendComparison.comparisonLabel}`;
+    }
+    get covTrendClass() {
+        if (!this.trendHasHistory) return 'ona-trend-line';
+        const d = this.trendComparison.coverageDelta;
+        return 'ona-trend-line ' + (d > 0 ? 'ona-trend-up' : d < 0 ? 'ona-trend-down' : 'ona-trend-flat');
+    }
+
+    get mtTrendLabel() {
+        if (!this.trendHasHistory) return '';
+        const d = this.trendComparison.multiThreadDelta;
+        const sign = d > 0 ? '+' : '';
+        const arrow = d > 0 ? '↑' : d < 0 ? '↓' : '→';
+        return `${arrow} ${sign}${d}% vs ${this.trendComparison.comparisonLabel}`;
+    }
+    get mtTrendClass() {
+        if (!this.trendHasHistory) return 'ona-trend-line';
+        const d = this.trendComparison.multiThreadDelta;
+        return 'ona-trend-line ' + (d > 0 ? 'ona-trend-up' : d < 0 ? 'ona-trend-down' : 'ona-trend-flat');
+    }
+    get campModeIsExisting()   { return this.campMode==='existing'; }
+    get campModeIsNew()        { return this.campMode==='new'; }
+    get campModeExistingClass(){ return 'ona-camp-mode-btn'+(this.campMode==='existing'?' on':''); }
+    get campModeNewClass()     { return 'ona-camp-mode-btn'+(this.campMode==='new'?' on':''); }
+    get campAddDisabled()      { if(!this.hasCampSelected) return true; if(this.campMode==='existing'&&!this.campPickedId) return true; if(this.campMode==='new'&&!this.newCampName.trim()) return true; return false; }
+    get campSelCountLabel()    { const n=this.campSelectedContacts.length; return n>0?`${n} contact${n===1?'':'s'}`:'0 contacts'; }
+    get campStatusSent()      { return 'ona-camp-status-btn'+(this.campMemberStatus==='Sent'?' on':''); }
+    get campStatusResponded() { return 'ona-camp-status-btn'+(this.campMemberStatus==='Responded'?' on':''); }
+    get campStatusPlanned()   { return 'ona-camp-status-btn'+(this.campMemberStatus==='Planned'?' on':''); }
+    get campBtnClass()         { return 'ona-bell-btn'+(this.campPanelOpen?' active':''); }
+    get campChipCooling()      { return 'ona-camp-chip'+(this.campActiveChips.includes('cooling')?' on':''); }
+    get campChipCold()         { return 'ona-camp-chip'+(this.campActiveChips.includes('cold')?' on':''); }
+    get campChipDark()         { return 'ona-camp-chip'+(this.campActiveChips.includes('dark')?' on':''); }
     get panelClass()   { return 'ona-rpanel' + (this.panelOpen?'':' closed'); }
     get tipClass()     { return 'ona-tip' + (this.tipVisible?' v':''); }
 
@@ -320,6 +485,65 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
     // Contact styles
     get avStyle()      { const c=this._nc(this.contact.nodeType||'connector'); return `background:${c}20;color:${c};border-color:${c}`; }
     get badgeStyle()   { const map={'Network Hub':'#b45309','Gatekeeper':'#4338ca','Key Influencer':'#0369a1','Active Contact':'#0369a1','Low Engagement':'#94a3b8','Cooling Contact':'#dc2626','Central Communicator':'#0369a1','Cross-Account Bridge':'#4338ca'}; const c=map[this.contact.networkRole]||'#0369a1'; return `background:${c}15;color:${c}`; }
+
+    // ── Data Completeness Badge (v4.5) ───────────────────────────────────────
+    get compBadgeClass() {
+        const lvl = this.contact.completenessLevel;
+        return 'ona-comp-badge ' + (lvl==='complete' ? 'ona-comp-ok' : lvl==='partial' ? 'ona-comp-warn' : 'ona-comp-none');
+    }
+    get compBadgeIcon() {
+        const lvl = this.contact.completenessLevel;
+        return lvl==='complete' ? '✓' : lvl==='partial' ? '!' : '';
+    }
+    get compBadgeTitle() {
+        const lvl = this.contact.completenessLevel;
+        if (lvl==='complete') return 'Phone/Mobile, Email, and Title are all on file';
+        if (lvl==='partial')  return 'Some contact details missing — scores may be less reliable';
+        return 'Phone, Email, and Title are all missing for this contact';
+    }
+
+    // Contact Details section — shows actual values, greys out + italicises if missing
+    get cdPhoneValue()  { return this.contact.phone || 'Not on file'; }
+    get cdMobileValue() { return this.contact.mobilePhone || 'Not on file'; }
+    get cdEmailValue()  { return this.contact.email || 'Not on file'; }
+    get cdTitleValue()  { return this.contact.title || 'Not on file'; }
+    get cdPhoneClass()  { return 'ona-cd-cell-val' + (this.contact.phone ? '' : ' ona-cd-missing'); }
+    get cdMobileClass() { return 'ona-cd-cell-val' + (this.contact.mobilePhone ? '' : ' ona-cd-missing'); }
+    get cdEmailClass()  { return 'ona-cd-cell-val' + (this.contact.email ? '' : ' ona-cd-missing'); }
+    get cdTitleClass()  { return 'ona-cd-cell-val' + (this.contact.title ? '' : ' ona-cd-missing'); }
+
+    get cdSummaryClass() {
+        const lvl = this.contact.completenessLevel;
+        return 'ona-cd-summary ' + (lvl==='complete' ? 'ona-cd-summary-ok' : lvl==='partial' ? 'ona-cd-summary-warn' : 'ona-cd-summary-none');
+    }
+    get cdSummaryLabel() {
+        const lvl = this.contact.completenessLevel;
+        const n = this.contact.completenessCount || 0;
+        if (lvl==='complete') return '✓ All key fields on file';
+        if (lvl==='partial')  return `! ${n} of 3 fields on file — some details missing`;
+        return '✕ No contact details on file';
+    }
+
+    @track cdCopiedField = '';
+    _cdCopyTimer = null;
+    handleCopyField(e) {
+        const field = e.currentTarget.dataset.field;
+        const valueMap = {
+            phone:  this.contact.phone,
+            mobile: this.contact.mobilePhone,
+            email:  this.contact.email,
+            title:  this.contact.title
+        };
+        const val = valueMap[field];
+        if (!val) return; // nothing to copy for "Not on file"
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(val).catch(()=>{});
+        }
+        const labelMap = { phone:'Phone', mobile:'Mobile', email:'Email', title:'Title' };
+        this.cdCopiedField = labelMap[field];
+        clearTimeout(this._cdCopyTimer);
+        this._cdCopyTimer = setTimeout(()=>{ this.cdCopiedField = ''; }, 1600);
+    }
     get infBarStyle()  { return `width:${this.contact.influenceScore||0}%;background:${this.pal.hub}`; }
     get cenBarStyle()  { return `width:${this.contact.centralityScore||0}%;background:${this.pal.connector}`; }
     get decBarStyle()  { return `width:${this.contact.decayScore||0}%;background:#059669`; }
@@ -429,6 +653,12 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
                 }));
             }
 
+            // Fetch score history trend (non-blocking — failure here should
+            // never break the main graph load)
+            if (this.mode==='account' && this.selectedAcctId) {
+                this._loadScoreTrend(this.selectedAcctId);
+            }
+
             // Populate dynamic filter dropdowns
             this._populateFilterOptions(this._allNodes);
             // Populate portfolio accounts
@@ -438,6 +668,14 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
             this._applyHL(this.hlMode);
             this.bellDot = true;
             if(this.summaryOpen) this._buildSummary();
+            if(this._pendingHandoverPack) {
+                this._pendingHandoverPack = false;
+                setTimeout(() => this._openHandoverPack(this._allNodes, this._allEdges, this._accountIntel, this.searchTerm, this.isDark), 300);
+            }
+            // Highlight contact if selected from search
+            if(this._contactToHighlight) {
+                setTimeout(() => this._highlightContact(this._contactToHighlight), 600);
+            }
         } catch(e) {
             this._err(e.body ? e.body.message : e.message);
         } finally {
@@ -499,7 +737,7 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
             .on('click',    (e,d)=>{ e.stopPropagation(); this._nodeClick(d,links,nodes); })
             .on('mouseover',(e,d)=>this._showTip(e,d))
             .on('mousemove', e=>this._moveTip(e))
-            .on('mouseout',  ()=>this._hideTip());
+            .on('mouseleave',()=>this._hideTip());
 
         this._nodeSel.filter(d=>d.nodeType==='hub').append('circle')
             .attr('r',d=>nr(d)+9).attr('fill','none').attr('stroke',nc).attr('stroke-width',1).attr('opacity',.35);
@@ -519,6 +757,69 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
             .attr('text-anchor','middle').attr('dy',d=>nr(d)+26)
             .attr('font-family','sans-serif').attr('font-size','12').attr('font-weight','700')
             .attr('fill',velColor).text(d=>d.velocityArrow||'→');
+
+        // ── Last Activity Badge (v4.1) ─────────────────────────────────────
+        // Badge pill — hidden by default, shown when showLastActivity is true
+        this._nodeSel.append('rect').attr('class','_act-badge')
+            .attr('x',-18).attr('y',d=>nr(d)+30)
+            .attr('width',36).attr('height',14).attr('rx',7)
+            .attr('fill',d=>d.activityBadgeColor||'#94A3B8')
+            .attr('opacity', this.showLastActivity ? 1 : 0);
+        this._nodeSel.append('text').attr('class','_act-label')
+            .attr('text-anchor','middle').attr('dy',d=>nr(d)+41)
+            .attr('font-family','sans-serif').attr('font-size','8').attr('font-weight','700')
+            .attr('fill','#ffffff')
+            .attr('opacity', this.showLastActivity ? 1 : 0)
+            .text(d=>d.activityBadgeLabel||'—');
+
+        // ── Data Completeness Badge (v4.5) ──────────────────────────────────
+        // Small dot top-right of the node. Green check = Phone/Mobile + Email
+        // + Title all present. Amber = 1-2 present. No badge at all when 0
+        // fields present — an empty dot would just be visual noise; the
+        // contact already looks sparse without a marker.
+        const compColor = d => d.completenessLevel==='complete' ? '#059669'
+                              : d.completenessLevel==='partial'  ? '#d97706'
+                              : null;
+        this._nodeSel.filter(d=>d.completenessLevel!=='incomplete').append('circle').attr('class','_comp-badge')
+            .attr('cx',d=>nr(d)*0.72).attr('cy',d=>-nr(d)*0.72).attr('r',5.5)
+            .attr('fill',compColor).attr('stroke',dk?'#0d111c':'#ffffff').attr('stroke-width',1.5);
+        this._nodeSel.filter(d=>d.completenessLevel==='complete').append('text').attr('class','_comp-tick')
+            .attr('x',d=>nr(d)*0.72).attr('y',d=>-nr(d)*0.72)
+            .attr('text-anchor','middle').attr('dominant-baseline','central')
+            .attr('font-family','sans-serif').attr('font-size','7').attr('font-weight','900')
+            .attr('fill','#ffffff').text('✓');
+        this._nodeSel.filter(d=>d.completenessLevel==='partial').append('text').attr('class','_comp-tick')
+            .attr('x',d=>nr(d)*0.72).attr('y',d=>-nr(d)*0.72)
+            .attr('text-anchor','middle').attr('dominant-baseline','central')
+            .attr('font-family','sans-serif').attr('font-size','8').attr('font-weight','900')
+            .attr('fill','#ffffff').text('!');
+
+        // ── Champion Risk Badge (v4.6) ───────────────────────────────────────
+        // Pulsing red ring + warning badge, top-LEFT corner (opposite the
+        // completeness badge) so a contact can show both signals at once
+        // without visual collision. No Task created — this is purely a
+        // live, computed, in-graph signal per the user's explicit preference.
+        this._nodeSel.filter(d=>d.isChampionRisk).append('circle').attr('class','_champ-pulse')
+            .attr('r',d=>nr(d)+5).attr('fill','none').attr('stroke','#dc2626')
+            .attr('stroke-width',2).attr('opacity',.55);
+        this._nodeSel.filter(d=>d.isChampionRisk).select('._champ-pulse')
+            .append('animate')
+            .attr('attributeName','r')
+            .attr('values', d=>`${nr(d)+5};${nr(d)+11};${nr(d)+5}`)
+            .attr('dur','2s').attr('repeatCount','indefinite');
+        this._nodeSel.filter(d=>d.isChampionRisk).select('._champ-pulse')
+            .append('animate')
+            .attr('attributeName','opacity')
+            .attr('values','.55;.12;.55')
+            .attr('dur','2s').attr('repeatCount','indefinite');
+        this._nodeSel.filter(d=>d.isChampionRisk).append('circle').attr('class','_champ-badge')
+            .attr('cx',d=>-nr(d)*0.72).attr('cy',d=>-nr(d)*0.72).attr('r',6)
+            .attr('fill','#dc2626').attr('stroke',dk?'#0d111c':'#ffffff').attr('stroke-width',1.5);
+        this._nodeSel.filter(d=>d.isChampionRisk).append('text').attr('class','_champ-tick')
+            .attr('x',d=>-nr(d)*0.72).attr('y',d=>-nr(d)*0.72)
+            .attr('text-anchor','middle').attr('dominant-baseline','central')
+            .attr('font-family','sans-serif').attr('font-size','8').attr('font-weight','900')
+            .attr('fill','#ffffff').text('⚠');
 
         this._sim.on('tick',()=>{
             this._edgeSel.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
@@ -582,6 +883,15 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
             contactId:n.contactId, name:n.name, initials:n.initials,
             title:n.title, accountName:n.accountName, department:n.department,
             nodeType:n.nodeType, networkRole:this._networkRole(n),
+            // Contact detail fields — must be explicitly copied from node here
+            // since _openInsight() builds a plain object and only gets what
+            // it lists. These come from the Apex SOQL (Phone, MobilePhone,
+            // Email added to both fetch queries in ONAController v4.5).
+            email:n.email||'', phone:n.phone||'', mobilePhone:n.mobilePhone||'',
+            completenessLevel:n.completenessLevel||'incomplete',
+            completenessCount:n.completenessCount||0,
+            isChampionRisk:n.isChampionRisk||false,
+            championRiskReason:n.championRiskReason||'',
             influenceScore:n.influenceScore||0, centralityScore:n.centralityScore||0,
             influenceDesc:(n.influenceScore||0)>=75?'Key influencer':(n.influenceScore||0)>=50?'Moderate':'Limited',
             centralityDesc:(n.centralityScore||0)>=70?'Hub — info bridge':(n.centralityScore||0)>=40?'Well connected':'Peripheral',
@@ -797,11 +1107,56 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
     // ── Tooltip ───────────────────────────────────────────────────────────────
     _showTip(e,d) {
         const vc = VEL_COLORS[d.velocityLabel]||VEL_COLORS.Stable;
-        this.tip = { name:d.name, role:d.title, acct:d.accountName||'', inf:d.influenceScore||0, cen:d.centralityScore||0, btw:d.betweennessScore||0, con:d.connectionCount||0, velArrow:d.velocityArrow||'→', velLabel:d.velocityLabel||'Stable', velStyle:`background:${vc.bg};color:${vc.color}` };
-        this.tipVisible=true; this._moveTip(e);
+        // Set base tip data immediately
+        this.tip = {
+            name:d.name, role:d.title, acct:d.accountName||'',
+            inf:d.influenceScore||0, cen:d.centralityScore||0,
+            btw:d.betweennessScore||0, con:d.connectionCount||0,
+            velArrow:d.velocityArrow||'→', velLabel:d.velocityLabel||'Stable',
+            velStyle:`background:${vc.bg};color:${vc.color}`,
+            championRisk:d.isChampionRisk||false, championReason:d.championRiskReason||'',
+            // Seller section — loading state
+            sellers:[], hasSellers:false, mostActive:'', sellersLoading:true
+        };
+        this.tipVisible = true;
+        this._moveTip(e);
+
+        // Seller interactions — read directly from node data (no async callout)
+        // Data is pre-populated by populateLastActivity() in getAccountGraph Apex
+        const sellers = d.sellerInteractions || [];
+        this.tip = {
+            name:           this.tip.name,
+            role:           this.tip.role,
+            acct:           this.tip.acct,
+            inf:            this.tip.inf,
+            cen:            this.tip.cen,
+            btw:            this.tip.btw,
+            con:            this.tip.con,
+            velArrow:       this.tip.velArrow,
+            velLabel:       this.tip.velLabel,
+            velStyle:       this.tip.velStyle,
+            championRisk:   this.tip.championRisk,
+            championReason: this.tip.championReason,
+            sellers,
+            hasSellers:     sellers.length > 0,
+            sellersLoading: false,
+            mostActive:     sellers.length > 0 ? sellers[0].repName : ''
+        };
     }
-    _moveTip(e) { const tt=this.refs.graphTooltip; if(!tt) return; const r=this.refs.graphContainer.getBoundingClientRect(); tt.style.left=(e.clientX-r.left+14)+'px'; tt.style.top=(e.clientY-r.top+14)+'px'; }
-    _hideTip()  { this.tipVisible=false; }
+    _moveTip(e) {
+        const tt = this.refs.graphTooltip;
+        if (!tt) return;
+        const r = this.refs.graphContainer.getBoundingClientRect();
+        const x = e.clientX - r.left;
+        const y = e.clientY - r.top;
+        // Flip left if near right edge
+        tt.style.left = x > r.width - 280 ? (x - 280) + 'px' : (x + 14) + 'px';
+        tt.style.top  = Math.max(0, y - 20) + 'px';
+    }
+    _hideTip() {
+        clearTimeout(this._tooltipTimer);
+        this.tipVisible = false;
+    }
 
     // ── Highlight modes ───────────────────────────────────────────────────────
     _applyHL(mode) {
@@ -854,6 +1209,30 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
             this.isLoading=false;
         }
     }
+    handleToggleActivity() {
+        this.showLastActivity = !this.showLastActivity;
+        const cont = this.refs.svgContainer;
+        if (cont && window.d3) {
+            const badges = window.d3.select(cont).selectAll('rect._act-badge');
+            if (!badges.empty()) {
+                this._applyActivityBadges(this.showLastActivity);
+                return;
+            }
+        }
+        if (this._nodes && this._nodes.length) {
+            this._render();
+            this._applyHL(this.hlMode);
+        }
+    }
+
+    _applyActivityBadges(visible) {
+        const cont = this.refs.svgContainer;
+        if (!cont || !window.d3) return;
+        const op = visible ? 1 : 0;
+        window.d3.select(cont).selectAll('rect._act-badge').attr('opacity', op);
+        window.d3.select(cont).selectAll('text._act-label').attr('opacity', op);
+    }
+
     handleRefresh()      { if(this.mode!=='portfolio') this._load(); else this._renderPortfolioGraph(); }
     handleIndustry(e)    { this.industry=e.target.value; this._load(); }
     handleTheme()        { this.isDark=!this.isDark; if(this._nodes.length){ this._render(); this._applyHL(this.hlMode); } if(this.mode==='portfolio') this._renderPortfolioGraph(); }
@@ -870,20 +1249,55 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
     handleRecoClick(e)   { const n=this._nodeData.find(nd=>nd.contactId===e.currentTarget.dataset.id); if(n)this._nodeClick(n,this._linkData,this._nodeData); }
 
     async handleSearch(e) {
-        this.searchTerm=e.target.value; this.showDropdown=false;
+        this.searchTerm = e.target.value;
+        this.showDropdown = false;
         clearTimeout(this._searchTimer);
-        if(this.searchTerm.length<2) return;
-        this._searchTimer=setTimeout(async()=>{
+        if (this.searchTerm.length < 2) return;
+        this._searchTimer = setTimeout(async () => {
             try {
-                const results = await searchAccounts({searchTerm:this.searchTerm});
-                this.accountResults = results.map(r=>({ ...r, nameInitial:r.Name?r.Name[0]:'?' }));
-                this.showDropdown=true;
-            } catch{ /* ignore */ }
-        },300);
+                const raw = await searchAccountsAndContacts({ searchTerm: this.searchTerm });
+                this.searchResults = raw.map(r => ({
+                    ...r,
+                    isAccount: r.type === 'account',
+                    isContact: r.type === 'contact',
+                    icon: r.type === 'account' ? '🏢' : '👤',
+                    rowClass: 'ona-ditem' + (r.type === 'contact' ? ' ona-ditem-contact' : '')
+                }));
+                this.accountResults = raw
+                    .filter(r => r.type === 'account')
+                    .map(r => ({ Id: r.id, Name: r.name, Industry: r.subtitle, nameInitial: r.initial }));
+                this.showDropdown = this.searchResults.length > 0;
+            } catch(err) { /* ignore */ }
+        }, 300);
     }
-    handleSearchFocus() { if(this.accountResults.length) this.showDropdown=true; }
-    handleSearchBlur()  { setTimeout(()=>{ this.showDropdown=false; },200); }
-    selectAccount(e)    { this.selectedAcctId=e.currentTarget.dataset.id; this.searchTerm=e.currentTarget.dataset.name; this.showDropdown=false; this.mode='account'; this._load(); }
+    handleSearchFocus() { if (this.searchResults.length) this.showDropdown = true; }
+    handleSearchBlur()  { setTimeout(() => { this.showDropdown = false; }, 200); }
+
+    selectResult(e) {
+        const type      = e.currentTarget.dataset.type;
+        const id        = e.currentTarget.dataset.id;
+        const name      = e.currentTarget.dataset.name;
+        const accountId = e.currentTarget.dataset.accountid;
+        this.showDropdown = false;
+        this.mode = 'account';
+
+        if (type === 'account') {
+            // Existing behaviour — load account graph
+            this.searchTerm    = name;
+            this.selectedAcctId = id;
+            this._contactToHighlight = null;
+            this._load();
+        } else {
+            // Contact selected — load their account then highlight the contact node
+            this.searchTerm    = name + ' (' + e.currentTarget.dataset.accountname + ')';
+            this.selectedAcctId = accountId;
+            this._contactToHighlight = id;
+            this._load();
+        }
+    }
+
+    // Keep selectAccount for backward compatibility (Compare pane uses it)
+    selectAccount(e) { this.selectResult(e); }
 
     // ── Guide ─────────────────────────────────────────────────────────────────
     get currentStep()    { return GUIDE_STEPS[this.guideStep]||GUIDE_STEPS[0]; }
@@ -1055,9 +1469,478 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
         };
     }
 
-    get summaryBellClass() { return 'ona-bell-btn' + (this.summaryOpen?' active':''); }
+    get summaryBellClass()     { return 'ona-bell-btn' + (this.summaryOpen?' active':''); }
+    get activityBadgeBtnClass() { return 'ona-hbtn' + (this.showLastActivity?' ona-badge-btn-on':''); }
 
         // ── Analytics handlers ───────────────────────────────────────────────────
+    handleCompareMode() {
+        this.mode = 'compare';
+        this.hasCmpResults = false;
+        this._cmpDataA = null;
+        this._cmpDataB = null;
+    }
+
+    // ── ABM Intelligence (v4.7) ───────────────────────────────────────────────
+    handlePortTabList() { this.portSubTab = 'list'; }
+
+    async handlePortTabABM() {
+        this.portSubTab = 'abm';
+        this.abmSelected = null;
+        if (this.abmAccounts.length === 0) {
+            await this._loadABMData();
+        } else {
+            setTimeout(() => this._renderABMChart(), 100);
+        }
+    }
+
+    async _loadABMData() {
+        this.abmLoading = true;
+        try {
+            const data = await getABMBubbleData();
+            this.abmAccounts = data || [];
+            this.abmStats = {
+                total:    this.abmAccounts.length,
+                ready:    this.abmAccounts.filter(a=>a.readiness==='Ready').length,
+                warming:  this.abmAccounts.filter(a=>a.readiness==='Warming').length,
+                atRisk:   this.abmAccounts.filter(a=>a.readiness==='At Risk').length,
+                champRisk:this.abmAccounts.filter(a=>a.championRisk).length
+            };
+            this.abmLoading = false;
+            await Promise.resolve();
+            setTimeout(() => this._renderABMChart(), 150);
+        } catch(e) {
+            this.abmLoading = false;
+            this.dispatchEvent(new ShowToastEvent({ title:'ABM load failed', message:e.body?e.body.message:e.message, variant:'error' }));
+        }
+    }
+
+    // ── Build the action panel data for a clicked account ─────────────────
+    _buildAbmSelected(d) {
+        const col  = v => v>=70?'#059669':v>=40?'#d97706':'#dc2626';
+        const rc   = d.readiness==='Ready'?{bg:'#dcfce7',fg:'#15803d'}:d.readiness==='Warming'?{bg:'#fef3c7',fg:'#92400e'}:{bg:'#fee2e2',fg:'#991b1b'};
+        const initials = (d.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+
+        // Build top contacts from velocity breakdown string if no contact array
+        const contacts = (d.topContact) ? [
+            { name:d.topContact, titleInfluence:'Influence ' + (d.topInfluence||0), initials:d.topContact.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(), initStyle:`background:${rc.bg};color:${rc.fg}`, velStyle:`background:${d.championRisk?'#dc2626':'#94a3b8'};width:8px;height:8px;border-radius:50%;flex-shrink:0` }
+        ] : [];
+
+        return {
+            id:            d.id,
+            name:          d.name,
+            industry:      d.industry || 'Unknown',
+            initials,
+            avStyle:       `background:${rc.bg};color:${rc.fg}`,
+            abmPlay:       d.abmPlay,
+            abmPlayIcon:   d.abmPlayIcon,
+            playBadgeStyle:`background:${rc.bg};color:${rc.fg};display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600;margin-top:4px`,
+            coverageScore: d.coverageScore||0,
+            multiThreadScore: d.multiThreadScore||0,
+            covStyle:      `color:${col(d.coverageScore||0)};font-size:20px;font-weight:600;line-height:1`,
+            mtStyle:       `color:${col(d.multiThreadScore||0)};font-size:20px;font-weight:600;line-height:1`,
+            covBarStyle:   `width:${d.coverageScore||0}%;background:${col(d.coverageScore||0)}`,
+            mtBarStyle:    `width:${d.multiThreadScore||0}%;background:${col(d.multiThreadScore||0)}`,
+            revenueLabel:  (d.annualRevenue||0)>=1000000000 ? '$'+((d.annualRevenue)/1000000000).toFixed(1)+'B'
+                         : (d.annualRevenue||0)>=1000000    ? '$'+((d.annualRevenue)/1000000).toFixed(0)+'M'
+                         : (d.annualRevenue||0)>0           ? '$'+this._fmtNum(d.annualRevenue)
+                         : '—',
+            pipelineLabel: (d.openPipeline||0)>0?'$'+this._fmtNum(d.openPipeline):'None',
+            topContacts:   contacts,
+            championRisk:  d.championRisk,
+            velocityBreakdown: d.velocityBreakdown
+        };
+    }
+
+    // ── D3 bubble chart ───────────────────────────────────────────────────
+    _renderABMChart() {
+        if (!window.d3 || !this.refs.abmChart) return;
+        const d3 = window.d3;
+        const cont = this.refs.abmChart;
+        cont.innerHTML = '';
+
+        const data = this.abmAccounts;
+        if (!data.length) return;
+
+        const margin = { top:40, right:20, bottom:52, left:70 };
+        const W = cont.clientWidth  || 580;
+        const H = cont.clientHeight || 420;
+        const iw = W - margin.left - margin.right;
+        const ih = H - margin.top  - margin.bottom;
+
+        const maxPipe  = d3.max(data, d => d.openPipeline||0) || 1;
+        const maxCnt   = d3.max(data, d => d.contactCount||1) || 1;
+        const colFn    = d => d.readiness==='Ready'?'#059669':d.readiness==='Warming'?'#d97706':'#dc2626';
+
+        const xScale = d3.scaleLinear().domain([0,100]).range([0,iw]);
+        const yScale = d3.scaleLinear().domain([0, maxPipe*1.15]).range([ih,0]);
+        const rScale = d3.scaleSqrt().domain([0,maxCnt]).range([10,34]);
+
+        const dk     = this.isDark;
+        const axCol  = dk?'#4a5568':'#94a3b8';
+        const txCol  = dk?'#94a3b8':'#475569';
+        const lbCol  = dk?'#f0f4ff':'#0f172a';
+        const bgQ    = dk?'rgba(255,255,255,.018)':'rgba(0,0,0,.018)';
+        const gridC  = dk?'rgba(255,255,255,.05)':'rgba(0,0,0,.05)';
+
+        const svg = d3.select(cont).append('svg').attr('width',W).attr('height',H);
+        const g   = svg.append('g').attr('transform',`translate(${margin.left},${margin.top})`);
+
+        // Quadrant backgrounds + labels
+        const midX = xScale(50), midY = yScale(maxPipe/2);
+        const quads = [
+            {x:0,   y:0,    w:midX,    h:midY,    l:'Protect & Expand', lx:midX/2,             ly:midY/2},
+            {x:midX,y:0,    w:iw-midX, h:midY,    l:'▲ ABM Priority',   lx:midX+(iw-midX)/2,  ly:midY/2},
+            {x:0,   y:midY, w:midX,    h:ih-midY, l:'Nurture & Warm Up',lx:midX/2,             ly:midY+(ih-midY)/2},
+            {x:midX,y:midY, w:iw-midX, h:ih-midY, l:'Qualify First',    lx:midX+(iw-midX)/2,  ly:midY+(ih-midY)/2}
+        ];
+        quads.forEach(q => {
+            g.append('rect').attr('x',q.x).attr('y',q.y).attr('width',q.w).attr('height',q.h).attr('fill',bgQ);
+            g.append('text').attr('x',q.lx).attr('y',q.ly).attr('text-anchor','middle').attr('dominant-baseline','middle')
+             .attr('font-size',10).attr('font-weight',600).attr('fill',axCol).attr('opacity',.4).attr('font-family','sans-serif').text(q.l);
+        });
+
+        // Dividers
+        g.append('line').attr('x1',midX).attr('y1',0).attr('x2',midX).attr('y2',ih).attr('stroke',axCol).attr('stroke-width',1).attr('stroke-dasharray','4,4').attr('opacity',.35);
+        g.append('line').attr('x1',0).attr('y1',midY).attr('x2',iw).attr('y2',midY).attr('stroke',axCol).attr('stroke-width',1).attr('stroke-dasharray','4,4').attr('opacity',.35);
+
+        // Grid
+        g.append('g').call(d3.axisLeft(yScale).ticks(5).tickSize(-iw).tickFormat('')).select('.domain').remove();
+        g.selectAll('.tick line').attr('stroke',gridC);
+        g.append('g').attr('transform',`translate(0,${ih})`).call(d3.axisBottom(xScale).ticks(5).tickSize(-ih).tickFormat('')).select('.domain').remove();
+        g.selectAll('.tick line').attr('stroke',gridC);
+
+        // Axes
+        g.append('g').attr('transform',`translate(0,${ih})`)
+         .call(d3.axisBottom(xScale).ticks(5).tickFormat(d=>d+'%'))
+         .call(ax=>{ax.select('.domain').attr('stroke',axCol);ax.selectAll('text').attr('fill',txCol).attr('font-size',10);ax.selectAll('.tick line').attr('stroke','none')});
+        g.append('g')
+         .call(d3.axisLeft(yScale).ticks(5).tickFormat(d=>d>=1000000?'$'+(d/1000000).toFixed(0)+'M':d===0?'$0':'$'+this._fmtNum(d)))
+         .call(ax=>{ax.select('.domain').attr('stroke',axCol);ax.selectAll('text').attr('fill',txCol).attr('font-size',10);ax.selectAll('.tick line').attr('stroke','none')});
+
+        // Axis labels
+        g.append('text').attr('x',iw/2).attr('y',ih+42).attr('text-anchor','middle').attr('font-size',11).attr('font-weight',600).attr('fill',txCol).attr('font-family','sans-serif').text('Relationship strength →');
+        g.append('text').attr('transform','rotate(-90)').attr('x',-ih/2).attr('y',-54).attr('text-anchor','middle').attr('font-size',11).attr('font-weight',600).attr('fill',txCol).attr('font-family','sans-serif').text('↑ Revenue at stake');
+
+        // Chart title
+        svg.append('text').attr('x',margin.left).attr('y',20).attr('font-size',12).attr('font-weight',600).attr('fill',lbCol).attr('font-family','sans-serif').text('Account Targeting Map — click any bubble to open action plan');
+
+        const self = this;
+        const nodes = g.selectAll('.abm-node').data(data).enter().append('g').attr('class','abm-node').attr('cursor','pointer')
+            .attr('transform',d=>`translate(${xScale(d.coverageScore||0)},${yScale(d.openPipeline||0)})`);
+
+        // Champion risk pulsing ring
+        nodes.filter(d=>d.championRisk).append('circle').attr('r',d=>rScale(d.contactCount||1)+7)
+            .attr('fill','none').attr('stroke','#dc2626').attr('stroke-width',2.5).attr('opacity',.4)
+            .each(function(){ d3.select(this).append('animate').attr('attributeName','r').attr('values',(d)=>`${rScale(d.contactCount||1)+7};${rScale(d.contactCount||1)+12};${rScale(d.contactCount||1)+7}`).attr('dur','2s').attr('repeatCount','indefinite'); });
+
+        // Main bubble
+        nodes.append('circle')
+            .attr('r',0).attr('fill',d=>colFn(d)+'28').attr('stroke',colFn).attr('stroke-width',d=>d.championRisk?2.5:1.5)
+            .transition().duration(600).delay((_,i)=>i*50).attr('r',d=>rScale(d.contactCount||1));
+
+        // Selected ring
+        nodes.append('circle').attr('class','sel-ring')
+            .attr('r',d=>rScale(d.contactCount||1)+4).attr('fill','none')
+            .attr('stroke',d=>colFn(d)).attr('stroke-width',2.5).attr('opacity',0);
+
+        // Play icon
+        nodes.append('text').attr('text-anchor','middle').attr('dominant-baseline','central').attr('dy',-3)
+            .attr('font-size',d=>rScale(d.contactCount||1)>22?14:11).attr('fill',colFn).attr('pointer-events','none').attr('font-family','sans-serif')
+            .text(d=>d.abmPlayIcon||'');
+
+        // Initials
+        nodes.append('text').attr('text-anchor','middle').attr('dominant-baseline','central').attr('dy',8)
+            .attr('font-size',8).attr('font-weight',700).attr('fill',colFn).attr('pointer-events','none').attr('font-family','sans-serif')
+            .text(d=>(d.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase());
+
+        // Name label
+        nodes.append('text').attr('text-anchor','middle').attr('y',d=>rScale(d.contactCount||1)+14)
+            .attr('font-size',9.5).attr('font-weight',500).attr('fill',txCol).attr('pointer-events','none').attr('font-family','sans-serif')
+            .text(d=>(d.name||'').length>16?(d.name||'').slice(0,14)+'…':d.name||'');
+
+        const tip = this.refs.abmTip;
+
+        nodes.on('mouseover', function(event, d) {
+                d3.select(this).select('circle:not(.sel-ring)').attr('fill', colFn(d)+'55').attr('stroke-width',2.5);
+                const covC = d.coverageScore>=70?'#059669':d.coverageScore>=40?'#d97706':'#dc2626';
+                const mtC  = d.multiThreadScore>=70?'#059669':d.multiThreadScore>=40?'#d97706':'#dc2626';
+                self.abmTip = {
+                    name:d.name, industry:d.industry||'', play:d.abmPlay, playIcon:d.abmPlayIcon,
+                    playStyle:`color:${d.abmPlayColor};font-weight:700;font-size:12px`,
+                    coverage:d.coverageScore||0, multiThread:d.multiThreadScore||0,
+                    contacts:d.contactCount, pipeline:d.openPipeline>0?'$'+self._fmtNum(d.openPipeline):'None',
+                    champRisk:d.championRisk,
+                    covStyle:`color:${covC};font-weight:700`, mtStyle:`color:${mtC};font-weight:700`
+                };
+                self.abmTipVisible = true;
+                const rect = cont.getBoundingClientRect();
+                const mx = event.clientX - rect.left;
+                const my = event.clientY - rect.top;
+                if(tip){ tip.style.left=(mx+14)+'px'; tip.style.top=Math.max(4,my-80)+'px'; }
+            })
+            .on('mouseout', function(event, d) {
+                d3.select(this).select('circle:not(.sel-ring)').attr('fill',colFn(d)+'28').attr('stroke-width',d.championRisk?2.5:1.5);
+                self.abmTipVisible = false;
+            })
+            .on('click', (event, d) => {
+                // Highlight selected bubble
+                g.selectAll('.sel-ring').attr('opacity',0);
+                g.selectAll('.abm-node').filter(n=>n.id===d.id).select('.sel-ring').attr('opacity',1);
+                // Load action panel without leaving ABM view
+                this.abmSelected = this._buildAbmSelected(d);
+                this.abmTipVisible = false;
+            });
+    }
+
+    // ── Action panel button handlers ──────────────────────────────────────
+    // ── Open relationship map — correct pattern matches search select handler ─
+    handleABMOpenGraph(e) {
+        const id  = e.currentTarget.dataset.id;
+        const acc = this.abmAccounts.find(a => a.id === id);
+        if (!id || !acc) return;
+        this.mode            = 'account';
+        this.portSubTab      = 'list';
+        this.panelOpen       = false;
+        this.showEmpty       = false;
+        this.searchTerm      = acc.name;
+        this.selectedAcctId  = id;
+        this._contactToHighlight = null;
+        this._load();
+    }
+
+    // ── Add cooling contacts to campaign — loads account in-place, stays on ABM ──
+    async handleABMAddCampaign(e) {
+        const id  = e.currentTarget.dataset.id;
+        const acc = this.abmAccounts.find(a => a.id === id);
+        if (!id || !acc) return;
+
+        // Show campaign panel immediately with loading state
+        this.campPanelOpen   = true;
+        this.campLastAdded   = '';
+        this.campLastId      = '';
+        this.campActiveChips = ['cooling', 'cold', 'dark'];
+        this.campAutoLabel   = 'Loading contacts for ' + acc.name + '…';
+        this.campSelectedContacts = [];
+        await this._loadExistingCampaigns();
+
+        // Fetch the account graph in the background without changing mode
+        try {
+            const json = await getAccountGraph({ accountId: id });
+            const p = JSON.parse(json);
+            // Temporarily populate _allNodes so _autoSelectAtRisk works
+            if (p && p.nodes) {
+                this._allNodes = p.nodes;
+                this._autoSelectAtRisk();
+            } else {
+                this.campAutoLabel = 'No contacts found — select manually';
+            }
+        } catch(err) {
+            this.campAutoLabel = 'Could not load contacts — select manually';
+        }
+    }
+
+    // ── Find unengaged contacts — activates Q4 (Engagement) filter on graph ────
+    // Q4 = "Who should I engage next?" — highlights contacts who are high-value
+    // but have had zero or minimal CRM interactions. Click any highlighted node
+    // to see the BFS warm intro path in the insight panel on the right.
+    handleABMFindIntro(e) {
+        const id  = e.currentTarget.dataset.id || (this.abmSelected && this.abmSelected.id);
+        const acc = this.abmAccounts.find(a => a.id === id);
+        if (!id || !acc) return;
+        this.mode            = 'account';
+        this.portSubTab      = 'list';
+        this.panelOpen       = false;
+        this.showEmpty       = false;
+        this.searchTerm      = acc.name;
+        this.selectedAcctId  = id;
+        this._contactToHighlight = null;
+        this._load();
+        // Activate Q4 after graph renders — same as clicking Q4 · Engagement button
+        setTimeout(() => { this.hlMode = 'engage'; this._applyHL('engage'); }, 2000);
+    }
+
+    handleABMAccountClick(e) {
+        const id = e.currentTarget.dataset.id;
+        if (!id) return;
+        const d = this.abmAccounts.find(a => a.id === id);
+        if (d) this.abmSelected = this._buildAbmSelected(d);
+    }
+
+    _fmtNum(n) {
+        if (!n || n===0) return '0';
+        if (n >= 1000000) return (n/1000000).toFixed(1).replace(/\.0$/,'') + 'M';
+        if (n >= 1000)    return (n/1000).toFixed(0) + 'K';
+        return String(Math.round(n));
+    }
+
+
+    handleCmpSearchA(e) {
+        this.compareSearchA = e.target.value;
+        this._cmpSearch('a', e.target.value);
+    }
+    handleCmpSearchB(e) {
+        this.compareSearchB = e.target.value;
+        this._cmpSearch('b', e.target.value);
+    }
+
+    _cmpSearch(side, term) {
+        if (!term || term.length < 2) {
+            if (side === 'a') this.cmpDropA = [];
+            else              this.cmpDropB = [];
+            return;
+        }
+        searchAccounts({ searchTerm: term })
+            .then(results => {
+                const list = results.map(a => ({ Id: a.Id, Name: a.Name }));
+                if (side === 'a') this.cmpDropA = list;
+                else              this.cmpDropB = list;
+            })
+            .catch(() => {});
+    }
+
+    handleCmpSelect(e) {
+        const side = e.currentTarget.dataset.side;
+        const id   = e.currentTarget.dataset.id;
+        const name = e.currentTarget.dataset.name;
+        if (side === 'a') {
+            this.compareSearchA = name;
+            this.cmpDropA = [];
+            this._cmpLoadA(id);
+        } else {
+            this.compareSearchB = name;
+            this.cmpDropB = [];
+            this._cmpLoadB(id);
+        }
+    }
+
+    handleRunComparison() {
+        if (this._cmpDataA && this._cmpDataB) {
+            this._buildComparison();
+        }
+    }
+
+    _cmpLoadA(accountId) {
+        getAccountGraph({ accountId })
+            .then(json => {
+                this._cmpDataA = JSON.parse(json);
+                if (this._cmpDataB) this._buildComparison();
+            })
+            .catch(e => console.error('CMP A load error', e));
+    }
+
+    _cmpLoadB(accountId) {
+        getAccountGraph({ accountId })
+            .then(json => {
+                this._cmpDataB = JSON.parse(json);
+                if (this._cmpDataA) this._buildComparison();
+            })
+            .catch(e => console.error('CMP B load error', e));
+    }
+
+    _buildComparison() {
+        const A = this._cmpDataA;
+        const B = this._cmpDataB;
+        if (!A || !B) return;
+
+        const nodesA = A.nodes || [], nodesB = B.nodes || [];
+        const edgesA = A.edges || [], edgesB = B.edges || [];
+        const aiA = A.accountIntel || {}, aiB = B.accountIntel || {};
+
+        const _col  = v => v>=70?'#059669':v>=40?'#b45309':'#dc2626';
+        const _bg   = v => v>=70?'#dcfce7':v>=40?'#fef3c7':'#fee2e2';
+        const _tc   = v => v>=70?'#15803d':v>=40?'#92400e':'#991b1b';
+
+        const covA  = aiA.coverageScore     || 0;
+        const covB  = aiB.coverageScore     || 0;
+        const mtA   = aiA.multiThreadScore  || 0;
+        const mtB   = aiB.multiThreadScore  || 0;
+        const hubsA = nodesA.filter(n=>n.nodeType==='hub').length;
+        const hubsB = nodesB.filter(n=>n.nodeType==='hub').length;
+
+        // Tiles
+        const mkTiles = (n,e,h,isA) => {
+            const oN = isA ? e.length : edgesA.length;
+            return [
+                { lbl:'Contacts', val:n.length, cls:'ona-cmp-tile'+(n.length>=(isA?nodesB.length:nodesA.length)?' ona-cmp-tile-win':'') },
+                { lbl:'Edges',    val:e.length, cls:'ona-cmp-tile'+(e.length>=(isA?edgesB.length:edgesA.length)?' ona-cmp-tile-win':'') },
+                { lbl:'Hubs',     val:h,        cls:'ona-cmp-tile'+(h>=(isA?hubsB:hubsA)?' ona-cmp-tile-win':'') },
+            ];
+        };
+
+        // Score rows
+        const scoreRows = [
+            { lbl:'Coverage Score',    vA:covA, vB:covB, unit:'%' },
+            { lbl:'Multi-thread Risk', vA:mtA,  vB:mtB,  unit:'%' },
+        ].map(s => ({
+            lbl:s.lbl,
+            valA:s.vA+s.unit, valB:s.vB+s.unit,
+            winA:s.vA>s.vB, winB:s.vB>s.vA,
+            styleA:`color:${_col(s.vA)}`,
+            styleB:`color:${_col(s.vB)}`,
+            barStyleA:`width:${s.vA}%;background:${_col(s.vA)}`,
+            barStyleB:`width:${s.vB}%;background:${_col(s.vB)}`,
+        }));
+
+        // Velocity
+        const mkVel = (nodes, total) => [
+            { lbl:'Growing ↑', count:nodes.filter(n=>n.velocityLabel==='Growing').length, col:'#059669' },
+            { lbl:'Stable →',  count:nodes.filter(n=>n.velocityLabel==='Stable').length,  col:'#94a3b8' },
+            { lbl:'Cooling ↓', count:nodes.filter(n=>n.velocityLabel==='Cooling').length, col:'#dc2626' },
+        ].map(v => ({
+            lbl:v.lbl, count:v.count,
+            dotStyle:`background:${v.col};width:8px;height:8px;border-radius:50%`,
+            barStyle:`width:${total?Math.round(v.count/total*100):0}%;background:${v.col};height:100%;border-radius:3px`,
+        }));
+
+        // Influencers
+        const mkInfl = (nodes) => [...nodes]
+            .sort((a,b)=>(b.influenceScore||0)-(a.influenceScore||0)).slice(0,3)
+            .map((n,i) => ({
+                id:n.contactId||('i'+i),
+                name:n.name||'', title:n.title||'',
+                ini:n.initials||'',
+                score:(n.influenceScore||0)+'pts',
+                avStyle:`background:${this._nc(n.nodeType)}20;color:${this._nc(n.nodeType)};width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700`
+            }));
+
+        // Risk
+        const mkRisk = (nodes, edges, ai) => {
+            const spof = nodes.filter(n=>edges.filter(e=>e.sourceId===n.contactId||e.targetId===n.contactId).length>=Math.ceil(edges.length*0.35)).length;
+            const decay = nodes.filter(n=>(n.decayScore||50)<35).length;
+            const dark  = nodes.filter(n=>(n.emailCount||0)+(n.meetingCount||0)===0).length;
+            const ws    = (ai.whitespace||[]).filter(w=>!w.engaged).length;
+            return [
+                { ico:'⚡', lbl:`${spof} single-point-of-failure`,   style:`color:${spof>0?'#dc2626':'#059669'};font-size:11px` },
+                { ico:'❄',  lbl:`${decay} cooling relationships`,    style:`color:${decay>3?'#b45309':'#059669'};font-size:11px` },
+                { ico:'🌑', lbl:`${dark} dark contacts`,             style:`color:${dark>2?'#475569':'#059669'};font-size:11px` },
+                { ico:'⬜', lbl:`${ws} whitespace gaps`,             style:`color:${ws>2?'#b45309':'#059669'};font-size:11px` },
+            ];
+        };
+
+        const overallWinA = (covA+mtA) >= (covB+mtB);
+
+        this.cmpResults = {
+            nameA:A.accountName||'Account A', nameB:B.accountName||'Account B',
+            badgeA:aiA.coverageBadge||'—',    badgeB:aiB.coverageBadge||'—',
+            metaA:`${nodesA.length} contacts · ${edgesA.length} edges`,
+            metaB:`${nodesB.length} contacts · ${edgesB.length} edges`,
+            badgeStyleA:`background:${_bg(covA)};color:${_tc(covA)};font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;display:inline-block`,
+            badgeStyleB:`background:${_bg(covB)};color:${_tc(covB)};font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;display:inline-block`,
+            headerStyleA:`border-color:${overallWinA?'#b45309':'var(--b1)'}`,
+            headerStyleB:`border-color:${!overallWinA?'#b45309':'var(--b1)'}`,
+            tilesA:mkTiles(nodesA,edgesA,hubsA,true),
+            tilesB:mkTiles(nodesB,edgesB,hubsB,false),
+            scoreRows,
+            velA:mkVel(nodesA,nodesA.length),
+            velB:mkVel(nodesB,nodesB.length),
+            inflA:mkInfl(nodesA),
+            inflB:mkInfl(nodesB),
+            riskA:mkRisk(nodesA,edgesA,aiA),
+            riskB:mkRisk(nodesB,edgesB,aiB),
+        };
+        this.hasCmpResults = true;
+    }
+
     handleAnalyticsMode() {
         this.mode='analytics'; this.analyticsTab='timeline';
         setTimeout(()=>this._renderAnalytics(),120);
@@ -1391,5 +2274,565 @@ export default class OnaRelationshipMap extends NavigationMixin(LightningElement
         });
     }
 
-        _err(msg) { this.hasError=true; this.errorMsg=msg; this.isLoading=false; }
+        _highlightContact(contactId) {
+        if (!this._nodeSel || !window.d3) return;
+        // Fade all other nodes
+        this._nodeSel.selectAll('circle').transition().duration(300)
+            .attr('opacity', d => d.contactId === contactId ? 1 : 0.15);
+        this._nodeSel.selectAll('text').transition().duration(300)
+            .attr('opacity', d => d.contactId === contactId ? 1 : 0.15);
+        // Zoom to that node
+        const target = this._allNodes.find(n => n.contactId === contactId);
+        if (target && this._gMain && this._zoom) {
+            const W = this.refs.svgContainer?.clientWidth || 800;
+            const H = this.refs.svgContainer?.clientHeight || 500;
+            // Find node position from D3 simulation
+            const d3 = window.d3;
+            let nx = W/2, ny = H/2;
+            this._nodeSel.each(function(d) {
+                if (d.contactId === contactId) { nx = d.x; ny = d.y; }
+            });
+            const svg = d3.select(this.refs.svgContainer).select('svg');
+            svg.transition().duration(600).call(
+                this._zoom.transform,
+                d3.zoomIdentity.translate(W/2 - nx*1.8, H/2 - ny*1.8).scale(1.8)
+            );
+        }
+        // Clear highlight after 4 seconds
+        setTimeout(() => {
+            if(this._nodeSel) {
+                this._nodeSel.selectAll('circle').transition().duration(300).attr('opacity', 1);
+                this._nodeSel.selectAll('text').transition().duration(300).attr('opacity', 1);
+            }
+            this._contactToHighlight = null;
+        }, 4000);
+    }
+
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // RELATIONSHIP HANDOVER PACK (v4.3)
+    // Entry point 1: Bell Summary popup → ↓ Download PDF button
+    // Entry point 2: Portfolio View → 📄 icon on each account row
+    // Generates a complete 8-page premium HTML report from live graph data.
+    // Opens in a new tab and auto-triggers the browser print dialog.
+    // Zero extra Apex — uses _allNodes, _allEdges, _accountIntel already loaded.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    handleDownloadHandoverPack() {
+        // Called from Bell Summary popup
+        this._openHandoverPack(
+            this._allNodes,
+            this._allEdges,
+            this._accountIntel,
+            this.summaryData && this.summaryData.acctName ? this.summaryData.acctName : this.searchTerm,
+            this.isDark
+        );
+    }
+
+    handlePortfolioHandoverPack(e) {
+        // Called from Portfolio View row — stops row click, loads account, then generates
+        e.stopPropagation();
+        const accountId   = e.currentTarget.dataset.id;
+        const accountName = e.currentTarget.dataset.name;
+        if (!accountId) return;
+
+        // If already loaded — generate immediately
+        if (this.selectedAcctId === accountId && this._allNodes.length) {
+            this._openHandoverPack(this._allNodes, this._allEdges, this._accountIntel, accountName);
+            return;
+        }
+        // Otherwise load the account first, then generate
+        this.selectedAcctId = accountId;
+        this.searchTerm     = accountName;
+        this.mode = 'account';
+        this._pendingHandoverPack = true;
+        this._load();
+    }
+
+    _openHandoverPack(nodes, edges, intel, accountName, isDark = false) {
+        console.log('[ONA] Handover Pack requested for:', accountName, '| nodes:', (nodes||[]).length, '| dark:', isDark);
+        if (!nodes || !nodes.length) {
+            // eslint-disable-next-line no-alert
+            alert('Please load an account first, then click Download.');
+            return;
+        }
+        try {
+            console.log('[ONA] Building HTML...');
+            const html = this._buildHandoverPackHTML(nodes, edges, intel, accountName, isDark);
+            console.log('[ONA] HTML built, length:', html ? html.length : 'NULL');
+            const blob = new Blob([html], { type: 'application/octet-stream' });
+            const url  = URL.createObjectURL(blob);
+            // Use anchor download — avoids window.open popup blockers and Salesforce CSP
+            const a    = document.createElement('a');
+            a.href     = url;
+            a.download = 'ONA_Handover_Pack_'
+                       + (accountName || 'Account').replace(/[^a-zA-Z0-9]/g, '_')
+                       + '.html';
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+        } catch(err) {
+            console.error('[ONA] Handover Pack error:', err);
+            // eslint-disable-next-line no-alert
+            alert('Error generating report. Check browser console for details.');
+        }
+    }
+
+    // ── HTML Generator ────────────────────────────────────────────────────────
+    _buildHandoverPackHTML(nodes, edges, intel, acctName, isDark = false) {
+        // Build theme CSS as plain string — no nested template literals (LWC Babel safe)
+        const themeCss = isDark
+            ? ':root{--paper:#0F172A;--surface:#1E293B;--s2:#263147;--s3:#1A2540;' +
+              '--royal:#93C5FD;--royal2:#BAD4FD;--bronze:#C99828;--bronzeL:#E8C76A;--bronzeBg:#1E2A18;' +
+              '--sage:#34D399;--sageBg:#0D2318;--sienna:#FCD34D;--siennaBg:#271D0A;' +
+              '--crimson:#FCA5A5;--crimBg:#2A0E0E;--steel:#93C5FD;--steelBg:#0F1E3C;' +
+              '--ink:#F1F5F9;--ink2:#CBD5E1;--ink3:#94A3B8;--rule:#334155;--rule2:#263147;' +
+              '--code-bg:#0D1526;--code-color:#93C5FD;--code-border:#1E3A5F;' +
+              'color-scheme:dark}'
+            : ':root{--paper:#F0EDE7;--surface:#fff;--s2:#F7F5F1;--s3:#EDE9E3;' +
+              '--royal:#1B3560;--royal2:#243F75;--bronze:#A8720E;--bronzeL:#C99828;--bronzeBg:#FCF5E4;' +
+              '--sage:#1A6840;--sageBg:#E6F2EA;--sienna:#9E4610;--siennaBg:#FAF0E6;' +
+              '--crimson:#8C1C1C;--crimBg:#FAE8E8;--steel:#1A4A96;--steelBg:#E6EEF8;' +
+              '--ink:#181E2C;--ink2:#3D4D60;--ink3:#64778C;--rule:#CECCBF;--rule2:#E2DDD6;' +
+              '--code-bg:#EEE9DF;--code-color:#1B3560;--code-border:#D0C9BE;' +
+              'color-scheme:light}';
+        const colorScheme = isDark ? 'dark' : 'light';
+        const today   = new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'long', year:'numeric' });
+        const name    = acctName || 'Account';
+        const ai      = intel  || {};
+        const covScore = ai.coverageScore     || 0;
+        const mtScore  = ai.multiThreadScore  || 0;
+        const netScore = Math.round((covScore + mtScore) / 2);
+
+        // Sort nodes by influence
+        const sorted   = [...nodes].sort((a,b) => (b.influenceScore||0) - (a.influenceScore||0));
+        const top8     = sorted.slice(0, 8);
+        const hubs     = nodes.filter(n => n.nodeType === 'hub');
+        const growing  = nodes.filter(n => n.velocityLabel === 'Growing');
+        const stable   = nodes.filter(n => n.velocityLabel === 'Stable');
+        const cooling  = nodes.filter(n => n.velocityLabel === 'Cooling');
+        const spof     = nodes.filter(n => (edges.filter(e => e.sourceId === n.contactId || e.targetId === n.contactId).length) >= Math.ceil(edges.length * 0.35));
+        const decayRisk= nodes.filter(n => (n.decayScore||50) < 35 && (n.decayScore||50) > 0);
+        const dark     = nodes.filter(n => (n.emailCount||0) + (n.meetingCount||0) === 0);
+
+        // Score colours
+        const sc = v => v >= 70 ? '#1A6840' : v >= 40 ? '#9E4610' : '#8C1C1C';
+        const sb = v => v >= 70 ? '#E6F2EA' : v >= 40 ? '#FAF0E6' : '#FAE8E8';
+        const sn = v => v >= 70 ? 'Good'    : v >= 40 ? 'Moderate': 'At Risk';
+
+        // Contact table rows
+        const contactRows = top8.map(n => {
+            const d    = n.decayScore || 0;
+            const dc   = d < 35 ? '#8C1C1C' : d < 60 ? '#9E4610' : '#1A6840';
+            const vCol = n.velocityLabel === 'Growing' ? '#1A6840' : n.velocityLabel === 'Cooling' ? '#9E4610' : '#64778C';
+            const vCls = n.velocityLabel === 'Growing' ? 'vel-g'    : n.velocityLabel === 'Cooling' ? 'vel-c'    : 'vel-s';
+            const ini  = (n.initials || n.name.split(' ').map(w=>w[0]).join('').slice(0,2)).toUpperCase();
+            const lastAct = n.activityBadgeLabel || n.lastActivityDate || '—';
+            const sellers = (n.sellerInteractions||[]).slice(0,2).map(s =>
+                `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:5px"><span style="width:5px;height:5px;border-radius:50%;background:${s.dotColor||'#94A3B8'};flex-shrink:0;display:inline-block"></span><span style="font-size:8px;color:#4A5568">${s.repName||''} ${s.whenLabel||''}</span></span>`
+            ).join('');
+            return `<tr${d < 35 && d > 0 ? ' style="background:#FFFCF5"' : dark.includes(n) ? ' style="background:#FDF5F5"' : ''}>
+              <td><span class="av" style="background:${sb(n.influenceScore||50)};color:${sc(n.influenceScore||50)}">${ini}</span><strong>${this._esc(n.name)}</strong></td>
+              <td>${this._esc(n.title||'')}</td>
+              <td>${this._esc(n.department||'')}</td>
+              <td><div class="ibar"><div class="itr"><div class="ifl" style="width:${n.influenceScore||0}%"></div></div><span style="font-family:var(--mono);font-size:8.5px">${n.influenceScore||0}</span></div></td>
+              <td style="font-family:var(--mono)">${n.centralityScore||0}</td>
+              <td style="font-family:var(--mono)">${n.betweennessScore||0}</td>
+              <td style="font-family:var(--mono);color:${dc};font-weight:${d<35?'700':'400'}">${d}${d < 35 && d > 0 ? ' ⚠' : d === 0 ? ' ⚠' : ''}</td>
+              <td><span class="${vCls}">${n.velocityArrow||'→'} ${n.velocityLabel||'Stable'}</span></td>
+              <td>${lastAct}</td>
+              <td style="font-size:8.5px">${sellers || '—'}</td>
+            </tr>`;
+        }).join('');
+
+        // Risk rows
+        const riskRows = [...spof.slice(0,1).map(n=>`<div class="rrow"><span class="av" style="background:#FAE8E8;color:#8C1C1C;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;flex-shrink:0">${(n.initials||'?').slice(0,2)}</span><span class="rn">${this._esc(n.name)}</span><span class="rrl">${this._esc(n.title||'')} · ${this._esc(n.department||'')}</span><span class="rtag rt-r">⚡ SPOF</span></div>`),
+             ...decayRisk.slice(0,3).map(n=>`<div class="rrow"><span class="av" style="background:#FAF0E6;color:#9E4610;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;flex-shrink:0">${(n.initials||'?').slice(0,2)}</span><span class="rn">${this._esc(n.name)}</span><span class="rrl">${this._esc(n.title||'')} · ${this._esc(n.department||'')}</span><span class="rtag rt-a">❄ Decay ${n.decayScore||0} · ${n.activityBadgeLabel||'—'} since last contact</span></div>`)
+            ].join('');
+
+        // Velocity bars HTML
+        const velHTML = `
+          <div class="vbar-row"><span class="vbar-lbl" style="color:#1A6840">↑ Growing</span><div class="vbar-tr"><div class="vbar-f" style="width:${nodes.length?Math.round(growing.length/nodes.length*100):0}%;background:#1A6840"></div></div><span class="vbar-ct" style="color:#1A6840">${growing.length}</span><span class="vbar-pct">${nodes.length?Math.round(growing.length/nodes.length*100):0}%</span></div>
+          <div class="vbar-row"><span class="vbar-lbl" style="color:#64778C">→ Stable</span><div class="vbar-tr"><div class="vbar-f" style="width:${nodes.length?Math.round(stable.length/nodes.length*100):0}%;background:#64778C"></div></div><span class="vbar-ct" style="color:#64778C">${stable.length}</span><span class="vbar-pct">${nodes.length?Math.round(stable.length/nodes.length*100):0}%</span></div>
+          <div class="vbar-row"><span class="vbar-lbl" style="color:#9E4610">↓ Cooling</span><div class="vbar-tr"><div class="vbar-f" style="width:${nodes.length?Math.round(cooling.length/nodes.length*100):0}%;background:#9E4610"></div></div><span class="vbar-ct" style="color:#9E4610">${cooling.length}</span><span class="vbar-pct">${nodes.length?Math.round(cooling.length/nodes.length*100):0}%</span></div>`;
+
+        // Department coverage
+        const depts = {};
+        nodes.forEach(n => { if(n.department) { const k = n.department; depts[k] = (depts[k]||0) + (n.emailCount||0) + (n.meetingCount||0)*2; }});
+        const deptRows = Object.entries(depts).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([d,v]) => {
+            const pct = Math.min(100, Math.round(v / Math.max(...Object.values(depts)) * 100));
+            const eng = pct >= 20;
+            return `<div class="dbar-row"><span class="dbar-lbl">${this._esc(d)}</span><div class="dbar-tr"><div class="dbar-f" style="width:${pct}%;background:${eng?'#1A6840':'#CECCBF'}"></div></div><span class="dbar-st" style="color:${eng?'#1A6840':'#8C1C1C'}">${eng?'Active':'⚠ Gap'}</span></div>`;
+        }).join('');
+
+        // Recommendations from top at-risk contacts
+        const recos = [...spof.slice(0,2), ...decayRisk.slice(0,2), ...growing.slice(0,1)].slice(0,5);
+        const recoRows = recos.map((n,i) => {
+            const isSpof   = spof.includes(n);
+            const isDecay  = decayRisk.includes(n);
+            const cls      = i < 2 ? 'reco-r' : i < 4 ? 'reco-a' : 'reco-b';
+            const pri      = i < 2 ? 'Critical — within 7 days' : i < 4 ? 'High — within 2 weeks' : 'Medium — within 30 days';
+            const priCls   = i < 2 ? 'pri-r' : i < 4 ? 'pri-a' : 'pri-b';
+            const reason   = isSpof  ? `${this._esc(n.name)} controls a significant portion of all relationship activity. Build 2 parallel relationships immediately.`
+                           : isDecay ? `Decay score ${n.decayScore} — ${n.activityBadgeLabel||'some time'} since last contact. Identify a warm introduction path and re-engage before renewal window.`
+                           : `Growing momentum — Influence ${n.influenceScore}. Invest now while engagement is rising.`;
+            return `<div class="reco ${cls}"><span class="reco-num">${String(i+1).padStart(2,'0')}</span><div><div class="reco-title">${this._esc(n.name)} — ${this._esc(n.title||'')} · ${this._esc(n.department||'')}</div><div class="reco-role">Influence ${n.influenceScore||0} · Centrality ${n.centralityScore||0} · Decay ${n.decayScore||0} · ${n.velocityLabel||'Stable'} ${n.velocityArrow||'→'}</div><div class="reco-body">${reason}</div><span class="reco-pri ${priCls}">${pri}</span></div></div>`;
+        }).join('');
+
+        return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><meta name="color-scheme" content="${colorScheme}"/>
+<title>ONA Handover Pack — ${this._esc(name)}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;0,9..144,700;1,9..144,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{--head:'Fraunces',Georgia,serif;--body:'Plus Jakarta Sans',system-ui,sans-serif;--mono:'JetBrains Mono',monospace}
+${themeCss}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}html{font-size:10px}body{font-family:var(--body);background:var(--paper);color:var(--ink);line-height:1.5}
+.toolbar{position:sticky;top:0;z-index:999;background:var(--royal);display:flex;align-items:center;justify-content:space-between;padding:10px 24px;box-shadow:0 2px 16px rgba(27,53,96,.25)}
+.toolbar-label{font-size:10px;color:rgba(255,255,255,.5);letter-spacing:.06em;font-family:var(--mono)}
+.btn-dl{display:flex;align-items:center;gap:6px;background:var(--bronzeL);color:#fff;border:none;border-radius:4px;padding:7px 18px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--body);letter-spacing:.04em;box-shadow:0 2px 10px rgba(168,114,14,.4)}
+.doc{max-width:860px;margin:0 auto}.page{background:var(--surface);margin-bottom:4px;padding:0;overflow:hidden}
+.cover-outer{min-height:380px;display:flex;flex-direction:column}
+.cover-top-bar{height:5px;background:linear-gradient(90deg,var(--royal) 0%,var(--bronzeL) 50%,var(--royal) 100%)}
+.cover-body{flex:1;display:grid;grid-template-columns:1fr 240px}
+.cover-main{padding:28px 28px 22px;border-right:1px solid var(--rule2)}
+.cover-eye{font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink3);margin-bottom:18px}
+.cover-rule{width:32px;height:2px;background:var(--bronze);margin-bottom:14px}
+.cover-acct{font-family:var(--head);font-style:italic;font-size:13px;color:var(--bronze);margin-bottom:7px;font-weight:300}
+.cover-title{font-family:var(--head);font-size:38px;font-weight:700;color:var(--royal);line-height:1.05;margin-bottom:8px;letter-spacing:-.01em}
+.cover-subtitle{font-size:10.5px;color:var(--ink2);font-weight:300;line-height:1.65;margin-bottom:16px;max-width:400px}
+.cover-kpi-mini{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.ckpi{background:var(--s2);border:1px solid var(--rule2);border-radius:4px;padding:8px 10px}
+.ckpi-l{font-size:7.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink3);margin-bottom:4px}
+.ckpi-v{font-family:var(--mono);font-size:20px;font-weight:500;line-height:1}
+.ckpi-bar{height:2px;background:var(--rule2);border-radius:1px;margin:5px 0 4px;overflow:hidden}
+.ckpi-fill{height:100%;border-radius:1px}
+.ckpi-b{font-size:7.5px;font-weight:700;padding:1.5px 6px;border-radius:2px;display:inline-block}
+.cover-insight{font-size:9.5px;color:var(--ink2);line-height:1.65;padding:8px 12px;background:var(--s2);border-left:2.5px solid var(--bronze)}
+.cover-sidebar{background:var(--royal);padding:22px 18px 18px;display:flex;flex-direction:column}
+.csf{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.07)}
+.csf:last-of-type{border:none;margin-bottom:0}.csf-l{font-size:7.5px;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.38);margin-bottom:2px}
+.csf-v{font-size:10px;color:rgba(255,255,255,.85);font-weight:600}.csf-tag{font-size:7.5px;color:var(--bronzeL);font-weight:500;margin-top:2px}
+.cover-conf{margin-top:auto;font-size:7.5px;color:rgba(255,255,255,.22);text-transform:uppercase;letter-spacing:.1em}
+.sec{padding:18px 26px 16px}.sec+.sec{border-top:1px solid var(--rule2)}
+.sh{display:flex;align-items:center;gap:10px;margin-bottom:9px}.sh::after{content:'';flex:1;height:1px;background:var(--royal);opacity:.15}
+.sh-num{font-family:var(--mono);font-size:9px;color:var(--bronze);font-weight:500;flex-shrink:0}
+.sh-t{font-family:var(--head);font-size:14px;font-weight:600;color:var(--royal);flex-shrink:0;letter-spacing:-.01em}
+.sh-pill{font-size:7.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;padding:2px 8px;border-radius:2px;flex-shrink:0}
+.pill-r{background:var(--crimBg);color:var(--crimson)}.pill-a{background:var(--siennaBg);color:var(--sienna)}.pill-g{background:var(--sageBg);color:var(--sage)}.pill-n{background:var(--s3);color:var(--ink3);border:1px solid var(--rule)}.pill-b{background:var(--steelBg);color:var(--steel)}
+.ssl{font-size:8px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--ink3);margin:9px 0 6px;padding-bottom:3px;border-bottom:1px dashed var(--rule2)}
+.narr{font-size:9.5px;color:var(--ink2);line-height:1.7;padding:8px 12px;background:var(--bronzeBg);border-left:2.5px solid var(--bronze);margin-bottom:9px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.sc{border:1px solid var(--rule2);border-radius:4px;overflow:hidden}.sc-h{background:var(--royal);padding:5px 12px;font-size:7.5px;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45);font-weight:600;font-family:var(--mono)}
+.sc-row{display:flex;justify-content:space-between;align-items:center;padding:4.5px 12px;border-bottom:1px solid var(--rule2);font-size:9.5px}.sc-row:last-child{border:none}
+.sc-k{color:var(--ink2)}.sc-v{font-family:var(--mono);font-size:10px;font-weight:500;color:var(--ink)}
+.ctbl{width:100%;border-collapse:collapse;font-size:9px}.ctbl thead tr{background:var(--royal)}
+.ctbl th{color:rgba(255,255,255,.5);font-size:7.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;padding:6px 8px;text-align:left;white-space:nowrap;font-family:var(--mono)}
+.ctbl td{padding:5.5px 8px;border-bottom:1px solid var(--rule2);vertical-align:middle}.ctbl tr:last-child td{border:none}
+.av{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;margin-right:4px;vertical-align:middle;flex-shrink:0}
+.vel-g{font-size:7px;font-weight:700;padding:1.5px 5px;border-radius:2px;background:var(--sageBg);color:var(--sage)}
+.vel-s{font-size:7px;font-weight:700;padding:1.5px 5px;border-radius:2px;background:var(--s3);color:var(--ink3);border:1px solid var(--rule)}
+.vel-c{font-size:7px;font-weight:700;padding:1.5px 5px;border-radius:2px;background:var(--siennaBg);color:var(--sienna)}
+.ibar{display:flex;align-items:center;gap:4px}.itr{width:38px;height:2.5px;background:var(--rule2);border-radius:1px;overflow:hidden}.ifl{height:100%;background:var(--steel);border-radius:1px}
+.rcard{border:1px solid;border-radius:4px;padding:10px 12px}.rcard-r{border-color:#EDBBBB;background:var(--crimBg)}.rcard-a{border-color:#EDD1AA;background:var(--siennaBg)}.rcard-s{border-color:var(--rule2);background:var(--s2)}
+.rc-ico{font-size:15px;margin-bottom:4px}.rc-lbl{font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}
+.rcard-r .rc-lbl{color:var(--crimson)}.rcard-a .rc-lbl{color:var(--sienna)}.rcard-s .rc-lbl{color:var(--ink3)}
+.rc-num{font-family:var(--mono);font-size:26px;line-height:1.1;margin-bottom:3px}.rcard-r .rc-num{color:var(--crimson)}.rcard-a .rc-num{color:var(--sienna)}.rcard-s .rc-num{color:var(--ink3)}
+.rc-txt{font-size:8.5px;color:var(--ink2);line-height:1.55}
+.rrow{display:flex;align-items:center;gap:8px;padding:5px 10px;border:1px solid var(--rule2);border-radius:3px;margin-bottom:4px;font-size:9px}.rrow:last-child{margin-bottom:0}
+.rn{font-weight:700;flex:1}.rrl{font-size:8.5px;color:var(--ink3)}.rtag{font-size:7.5px;font-weight:700;padding:1.5px 7px;border-radius:2px}.rt-r{background:var(--crimBg);color:var(--crimson)}.rt-a{background:var(--siennaBg);color:var(--sienna)}
+.vbar-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}.vbar-lbl{width:68px;font-size:9.5px;font-weight:600;flex-shrink:0}.vbar-tr{flex:1;height:7px;background:var(--rule2);border-radius:4px;overflow:hidden}.vbar-f{height:100%;border-radius:4px}.vbar-ct{font-family:var(--mono);font-size:10px;width:18px;text-align:right;flex-shrink:0}.vbar-pct{font-size:8.5px;color:var(--ink3);width:28px;flex-shrink:0}
+.dbar-row{display:flex;align-items:center;gap:7px;margin-bottom:4.5px}.dbar-lbl{width:95px;font-size:9px;color:var(--ink2);flex-shrink:0}.dbar-tr{flex:1;height:5.5px;background:var(--rule2);border-radius:3px;overflow:hidden}.dbar-f{height:100%;border-radius:3px}.dbar-st{font-size:8px;font-weight:700;width:40px;text-align:right;flex-shrink:0}
+.reco{display:flex;gap:12px;padding:9px 12px;border:1px solid var(--rule2);border-radius:4px;border-left:2.5px solid;margin-bottom:7px}.reco:last-child{margin-bottom:0}
+.reco-r{border-left-color:var(--crimson)}.reco-a{border-left-color:var(--sienna)}.reco-b{border-left-color:var(--steel)}
+.reco-num{font-family:var(--head);font-size:22px;color:var(--rule);flex-shrink:0;line-height:1.1}.reco-title{font-size:10.5px;font-weight:700;margin-bottom:1.5px}.reco-role{font-size:8.5px;color:var(--ink3);margin-bottom:4px}.reco-body{font-size:9.5px;color:var(--ink2);line-height:1.65}
+.reco-pri{font-size:7.5px;font-weight:700;padding:1.5px 7px;border-radius:2px;margin-top:5px;display:inline-block}.pri-r{background:var(--crimBg);color:var(--crimson)}.pri-a{background:var(--siennaBg);color:var(--sienna)}.pri-b{background:var(--steelBg);color:var(--steel)}
+.meth{margin-bottom:11px;padding-bottom:11px;border-bottom:1px solid var(--rule2)}.meth:last-child{border:none;margin:0;padding:0}
+.meth-name{font-size:10px;font-weight:700;color:var(--royal);margin-bottom:3px}.meth-f{font-family:var(--mono);font-size:8px;background:var(--code-bg);border:1px solid var(--code-border);border-radius:3px;padding:5.5px 9px;margin:4px 0;color:var(--code-color);display:block;line-height:1.8;white-space:pre-wrap}.meth-d{font-size:9.5px;color:var(--ink2);line-height:1.65}
+.glo{display:flex;gap:9px;padding:7px 10px;border:1px solid var(--rule2);border-radius:3px;margin-bottom:4.5px;background:var(--s2)}.glo:last-child{margin-bottom:0}
+.glo-n{font-family:var(--mono);font-size:8px;color:var(--bronze);width:16px;flex-shrink:0;margin-top:1px;font-weight:500}.glo-term{font-size:9.5px;font-weight:700;color:var(--royal);margin-bottom:2px}.glo-lbl{font-size:7.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--bronze);margin-bottom:2px}.glo-txt{font-size:8.5px;color:var(--ink2);line-height:1.55}
+.pf{display:flex;justify-content:space-between;align-items:center;padding:8px 26px;background:var(--s3);border-top:1px solid var(--rule2);font-size:7.5px;color:var(--ink3)}
+.pf-r{font-family:var(--mono)}
+.back{background:var(--royal);padding:14px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:5px;justify-content:center;min-height:60px}
+@media print{.toolbar{display:none!important}.page{margin-bottom:0;page-break-after:always}.page:last-of-type{page-break-after:auto}}
+</style></head><body>
+<div class="toolbar">
+  <span class="toolbar-label">ONA Handover Pack · ${this._esc(name)} · ${today}</span>
+  <button class="btn-dl" onclick="window.print()">↓ Download PDF</button>
+</div>
+<div class="doc">
+
+<!-- COVER -->
+<div class="page"><div class="cover-outer">
+  <div class="cover-top-bar"></div>
+  <div class="cover-body">
+    <div class="cover-main">
+      <div class="cover-eye">ONA Relationship Intelligence · Genpact Salesforce Practice</div>
+      <div class="cover-rule"></div>
+      <div class="cover-acct">${this._esc(name)}</div>
+      <div class="cover-title">Relationship<br>Handover Pack</div>
+      <div class="cover-subtitle">Complete account intelligence. All scores computed from live Salesforce data — no manual input required.</div>
+      <div class="cover-kpi-mini">
+        <div class="ckpi" style="border-color:${sc(covScore)}22"><div class="ckpi-l">Coverage</div><div class="ckpi-v" style="color:${sc(covScore)}">${covScore}<span style="font-size:12px">%</span></div><div class="ckpi-bar"><div class="ckpi-fill" style="width:${covScore}%;background:${sc(covScore)}"></div></div><span class="ckpi-b" style="background:${sb(covScore)};color:${sc(covScore)}">${sn(covScore)}</span></div>
+        <div class="ckpi" style="border-color:${sc(mtScore)}22"><div class="ckpi-l">Multi-thread</div><div class="ckpi-v" style="color:${sc(mtScore)}">${mtScore}<span style="font-size:12px">%</span></div><div class="ckpi-bar"><div class="ckpi-fill" style="width:${mtScore}%;background:${sc(mtScore)}"></div></div><span class="ckpi-b" style="background:${sb(mtScore)};color:${sc(mtScore)}">${sn(mtScore)}</span></div>
+        <div class="ckpi" style="border-color:${sc(netScore)}22"><div class="ckpi-l">Network Score</div><div class="ckpi-v" style="color:${sc(netScore)}">${netScore}<span style="font-size:12px">%</span></div><div class="ckpi-bar"><div class="ckpi-fill" style="width:${netScore}%;background:${sc(netScore)}"></div></div><span class="ckpi-b" style="background:${sb(netScore)};color:${sc(netScore)}">${sn(netScore)}</span></div>
+      </div>
+      <div class="cover-insight"><strong style="color:var(--royal)">Incoming rep brief:</strong> ${spof.length ? `${spof[0].name} is a single-point-of-failure. ` : ''}${decayRisk.length ? `${decayRisk.length} contact${decayRisk.length>1?'s':''} at decay risk. ` : ''}${dark.length ? `${dark.length} dark contacts with zero activity. ` : ''}Growing contacts: ${growing.length} of ${nodes.length}.</div>
+    </div>
+    <div class="cover-sidebar">
+      <div style="font-size:7.5px;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:14px">Document Metadata</div>
+      <div class="csf"><div class="csf-l">Account</div><div class="csf-v">${this._esc(name)}</div></div>
+      <div class="csf"><div class="csf-l">Generated</div><div class="csf-v">${today}</div></div>
+      <div class="csf"><div class="csf-l">Contacts Mapped</div><div class="csf-v">${nodes.length} contacts · ${edges.length} edges</div></div>
+      <div class="csf"><div class="csf-l">Hub Contacts</div><div class="csf-v">${hubs.length} hubs</div></div>
+      <div class="csf"><div class="csf-l">Growing</div><div class="csf-v" style="color:var(--bronzeL)">${growing.length} contacts (${nodes.length?Math.round(growing.length/nodes.length*100):0}%)</div></div>
+      <div class="csf"><div class="csf-l">Cooling</div><div class="csf-v" style="color:var(--bronzeL)">${cooling.length} contacts</div></div>
+      <div class="csf"><div class="csf-l">At Decay Risk</div><div class="csf-v">${decayRisk.length} contacts</div></div>
+      <div class="csf"><div class="csf-l">Dark Contacts</div><div class="csf-v">${dark.length} contacts</div></div>
+      <div class="csf"><div class="csf-l">Algorithm Suite</div><div class="csf-v">11 graph algorithms</div></div>
+      <div class="cover-conf">Confidential · Internal Use Only</div>
+    </div>
+  </div>
+</div></div>
+
+<!-- BUYING COMMITTEE -->
+<div class="page"><div class="sec">
+  <div class="sh"><span class="sh-num">02</span><span class="sh-t">Buying Committee Map</span><span class="sh-pill pill-n">${nodes.length} Contacts · All ONA Scores</span></div>
+  <table class="ctbl"><thead><tr><th>Contact</th><th>Title</th><th>Dept</th><th>Influence</th><th>Centrality</th><th>Betweenness</th><th>Decay</th><th>Velocity</th><th>Last Activity</th><th>Team Interactions</th></tr></thead>
+  <tbody>${contactRows}<tr><td colspan="10" style="font-size:8.5px;color:var(--ink3);font-style:italic;padding:4px 8px">↳ ${Math.max(0,nodes.length-8)} additional contacts in ONA Network Map. Highlighted rows require immediate attention.</td></tr></tbody></table>
+  <div style="margin-top:9px;padding:7px 11px;background:var(--s2);border:1px solid var(--rule2);border-radius:3px;font-size:8.5px;color:var(--ink2)"><strong style="color:var(--royal)">How to read:</strong> Influence = connections × seniority × activity. Centrality = network connectivity index. Betweenness = gatekeeper score. Decay = recency-weighted engagement (100=very active, 0=cold). ⚠ = action required.</div>
+</div>
+<div class="pf"><span>ONA Relationship Intelligence · Genpact · Confidential</span><span class="pf-r">01 / 05</span></div></div>
+
+<!-- RISK + VELOCITY -->
+<div class="page"><div class="sec">
+  <div class="sh"><span class="sh-num">03</span><span class="sh-t">Relationship Risk Assessment</span><span class="sh-pill ${spof.length > 0 ? 'pill-r' : 'pill-a'}">${spof.length + decayRisk.length} Risks Identified</span></div>
+  <div class="g3" style="margin-bottom:10px">
+    <div class="rcard rcard-r"><div class="rc-ico">⚡</div><div class="rc-lbl">Single-Point-of-Failure</div><div class="rc-num">${spof.length}</div><div class="rc-txt">${spof.length ? `${spof[0].name} controls a disproportionate share of activity. Departure would fracture the network.` : 'No SPOF contacts detected — activity is well distributed.'}</div></div>
+    <div class="rcard rcard-a"><div class="rc-ico">❄</div><div class="rc-lbl">Relationship Decay Risk</div><div class="rc-num">${decayRisk.length}</div><div class="rc-txt">Contacts below the 35-point decay threshold — engagement has cooled significantly. Re-contact required before renewal.</div></div>
+    <div class="rcard rcard-s"><div class="rc-ico">🌑</div><div class="rc-lbl">Dark Contacts</div><div class="rc-num">${dark.length}</div><div class="rc-txt">Zero logged CRM interactions. These stakeholders are completely outside the relationship map.</div></div>
+  </div>
+  <div class="ssl">At-Risk Contact Detail</div>
+  ${riskRows || '<div style="font-size:9px;color:var(--ink3);font-style:italic;padding:6px 0">No at-risk contacts identified — network is in good health.</div>'}
+</div>
+<div class="sec">
+  <div class="g2" style="gap:14px">
+    <div>
+      <div class="sh" style="margin-bottom:7px"><span class="sh-num">04</span><span class="sh-t">Engagement Velocity</span><span class="sh-pill pill-g">${growing.length} Growing</span></div>
+      ${velHTML}
+      <div class="narr" style="margin-top:7px;margin-bottom:0;font-size:9px">Growing (${growing.length}) vs cooling (${cooling.length}). ${growing.length > cooling.length ? 'Positive momentum — maintain.' : 'More contacts cooling than growing — intervention needed.'}</div>
+    </div>
+    <div>
+      <div class="sh" style="margin-bottom:7px"><span class="sh-num">05</span><span class="sh-t">Coverage by Department</span></div>
+      ${deptRows || '<div style="font-size:9px;color:var(--ink3);font-style:italic">No department data available.</div>'}
+    </div>
+  </div>
+</div>
+<div class="pf"><span>ONA Relationship Intelligence · Genpact · Confidential</span><span class="pf-r">02 / 05</span></div></div>
+
+<!-- RECOMMENDATIONS -->
+<div class="page"><div class="sec">
+  <div class="sh"><span class="sh-num">06</span><span class="sh-t">Priority Actions for Incoming Rep</span><span class="sh-pill pill-r">${recos.length} Actions</span></div>
+  ${recoRows || '<div style="font-size:9px;color:var(--ink3);font-style:italic;padding:6px 0">Load account graph to generate recommendations.</div>'}
+</div>
+<div class="pf"><span>ONA Relationship Intelligence · Genpact · Confidential</span><span class="pf-r">03 / 05</span></div></div>
+
+<!-- METHODOLOGY -->
+<div class="page"><div class="sec">
+  <div class="sh"><span class="sh-num">07</span><span class="sh-t">How the Scores Are Calculated — Methodology</span><span class="sh-pill pill-n">6 Formulas</span></div>
+  <div class="narr" style="margin-bottom:9px;font-size:9px">All scores computed from Salesforce Tasks, Events and OpportunityContactRoles. No manual input. Refresh by loading the ONA graph.</div>
+  <div class="g2" style="gap:14px">
+    <div>
+      <div class="meth"><div class="meth-name">Coverage Score</div><code class="meth-f">Score = (Engaged Depts ÷ Total Depts × 0.60)
+     + (Seniority Levels Hit ÷ 5 × 0.40)
+Engaged dept = ≥ 3 logged interactions</code><div class="meth-d">Weighted 60% departmental breadth, 40% seniority breadth. Below 40% = vulnerable to veto from anyone outside your circle.</div></div>
+      <div class="meth"><div class="meth-name">Multi-thread Risk (HHI)</div><code class="meth-f">HHI = Σ (each contact's activity share²)
+Score = (1 − HHI) × 100
+activity = emails×3 + meetings×5 + tasks×2</code><div class="meth-d">Herfindahl-Hirschman Index from economics. Below 40 = dangerously single-threaded. Most important number before any renewal.</div></div>
+      <div class="meth"><div class="meth-name">Influence Score</div><code class="meth-f">Raw = (connections × 2) + (activities × 3)
+     + roleWeight(title)
+Weights: C-Level=10,VP=8,Dir=6,Mgr=4,IC=2</code><div class="meth-d">Composite of connection breadth, engagement and seniority. Above 80 = contact whose endorsement moves others.</div></div>
+    </div>
+    <div>
+      <div class="meth"><div class="meth-name">Engagement Decay</div><code class="meth-f">Score = Σ ( weight × e^(−0.18 × months_ago) )
+Bands: 70+ Warm · 40–69 Cooling · 0–39 Cold</code><div class="meth-d">Exponential decay — recent interactions outweigh old ones. Below 35 = act now. Below 20 = starting cold regardless of history.</div></div>
+      <div class="meth"><div class="meth-name">Velocity Score</div><code class="meth-f">Δ = (last 90d − prior 90d) ÷ prior 90d
+Growing: Δ > +15%  Cooling: Δ < −15%</code><div class="meth-d">Direction of travel matters more than level. Growing = act now. Cooling = find out why before it becomes decay.</div></div>
+      <div class="meth"><div class="meth-name">Relationship Strength (Edge)</div><code class="meth-f">Strength = emails×3 + meetings×5 + tasks×2
+Min threshold: strength ≥ 2 to display</code><div class="meth-d">Meetings count most (×5) — highest-quality signal of a real relationship. Dashed line = weak — verify before using as intro bridge.</div></div>
+    </div>
+  </div>
+</div>
+<div class="pf"><span>ONA Relationship Intelligence · Genpact · Confidential</span><span class="pf-r">04 / 05</span></div></div>
+
+<!-- GLOSSARY -->
+<div class="page"><div class="sec">
+  <div class="sh"><span class="sh-num">08</span><span class="sh-t">Algorithm Glossary — What It Means for You as a Seller</span><span class="sh-pill pill-n">All 11 Algorithms</span></div>
+  <div class="g2" style="gap:8px">
+    <div>
+      <div class="glo"><span class="glo-n">01</span><div><div class="glo-term">Relationship Strength</div><div class="glo-lbl">What it means</div><div class="glo-txt">Thick gold line = strong intro path. Thin dashed = weak — verify before using as a bridge.</div></div></div>
+      <div class="glo"><span class="glo-n">02</span><div><div class="glo-term">Influence Score</div><div class="glo-lbl">What it means</div><div class="glo-txt">Above 80 = this contact moves others. Worth 3× the effort. Prioritise in first 30 days.</div></div></div>
+      <div class="glo"><span class="glo-n">03</span><div><div class="glo-term">Network Centrality</div><div class="glo-lbl">What it means</div><div class="glo-txt">Gold hub nodes — the people everyone talks to. Get them on side. Losing a hub is a critical event.</div></div></div>
+      <div class="glo"><span class="glo-n">04</span><div><div class="glo-term">Recommendation Engine</div><div class="glo-lbl">What it means</div><div class="glo-txt">Top 5 unengaged contacts whose engagement would most accelerate the deal right now.</div></div></div>
+      <div class="glo"><span class="glo-n">05</span><div><div class="glo-term">Engagement Decay</div><div class="glo-lbl">What it means</div><div class="glo-txt">Relationship freshness. Score 80 = warm. Score 30 = they have forgotten you. Check before every renewal conversation.</div></div></div>
+      <div class="glo"><span class="glo-n">06</span><div><div class="glo-term">Velocity Scoring</div><div class="glo-lbl">What it means</div><div class="glo-txt">↑ Growing = engage now. ↓ Cooling = find out why. More actionable than a static score.</div></div></div>
+    </div>
+    <div>
+      <div class="glo"><span class="glo-n">07</span><div><div class="glo-term">Betweenness Centrality</div><div class="glo-lbl">What it means</div><div class="glo-txt">Gatekeepers — control who talks to whom. Always engage before approaching the groups they bridge.</div></div></div>
+      <div class="glo"><span class="glo-n">08</span><div><div class="glo-term">BFS Warm Intro Paths</div><div class="glo-lbl">What it means</div><div class="glo-txt">Mathematically shortest introduction chain. Follow in order — never skip a hop. A 2-hop intro is warmer than a cold approach.</div></div></div>
+      <div class="glo"><span class="glo-n">09</span><div><div class="glo-term">Whitespace Analysis</div><div class="glo-lbl">What it means</div><div class="glo-txt">Departments with under 3 interactions. Gaps in Legal, Finance or IT cause surprises at deal close. Fix before renewal.</div></div></div>
+      <div class="glo"><span class="glo-n">10</span><div><div class="glo-term">Coverage Score</div><div class="glo-lbl">What it means</div><div class="glo-txt">Below 40% = vulnerable to veto. Above 70% = you have earned the right to be in the room when decisions are made.</div></div></div>
+      <div class="glo"><span class="glo-n">11</span><div><div class="glo-term">Multi-thread Risk (HHI)</div><div class="glo-lbl">What it means</div><div class="glo-txt">Below 40 = one person leaving stops your deal. Watch this number — not just the level but the velocity.</div></div></div>
+    </div>
+  </div>
+</div>
+<div class="pf"><span>ONA Relationship Intelligence · Genpact · Confidential</span><span class="pf-r">05 / 05</span></div></div>
+
+<div class="back"><div style="font-family:var(--head);font-size:14px;color:rgba(255,255,255,.75)">ONA Relationship Intelligence</div><div style="width:28px;height:1.5px;background:var(--bronzeL);margin:4px 0"></div><div style="font-size:8px;color:rgba(255,255,255,.28);letter-spacing:.14em;text-transform:uppercase">Genpact Salesforce Practice · Confidential · ${today}</div></div>
+</div></body></html>`;
+    }
+
+    // ── Campaign Creator — handlers ──────────────────────────────────────────
+
+    async _loadScoreTrend(accountId) {
+        try {
+            const result = await getScoreTrend({ accountId, daysBack: 180 });
+            this.trendPoints     = result.points || [];
+            this.trendComparison = result.comparison || null;
+        } catch(e) {
+            // Non-critical — silently skip trend display rather than
+            // surfacing an error toast for a secondary feature
+            this.trendComparison = null;
+            console.warn('[ONA] Score trend unavailable:', e.body ? e.body.message : e.message);
+        }
+    }
+
+    async handleOpenCampPanel() {
+        this.campPanelOpen   = true;
+        this.campLastAdded   = '';
+        this.campLastId      = '';
+        this.campActiveChips = ['cooling','cold','dark'];
+        this._autoSelectAtRisk();
+        await this._loadExistingCampaigns();
+    }
+
+    handleCloseCampPanel() {
+        this.campPanelOpen = false;
+        this.campDot = this.campSelectedContacts.length > 0;
+    }
+
+    _autoSelectAtRisk() {
+        if(!this._allNodes.length) return;
+        const atRisk = this._allNodes.filter(n=>{
+            return n.velocityLabel==='Cooling' || (n.decayScore||0)<40 || (n.totalActivities||0)===0;
+        });
+        this.campSelectedIds      = atRisk.map(n=>n.contactId);
+        this.campSelectedContacts = atRisk.map(n=>({
+            contactId:n.contactId, name:n.name, initials:n.initials, title:n.title||'',
+            riskLabel:this._riskLabel(n),
+            avStyle:`background:${this._nc(n.nodeType)}22;color:${this._nc(n.nodeType)};border:1px solid ${this._nc(n.nodeType)}44`
+        }));
+        const c=atRisk.length;
+        this.campAutoLabel = c>0 ? `${c} at-risk contact${c===1?'':'s'} auto-selected` : 'No at-risk contacts — select manually';
+        this.campDot = c>0;
+    }
+
+    _riskLabel(n) {
+        if((n.totalActivities||0)===0)    return '◉ Dark — no CRM activity';
+        if((n.decayScore||0)<40)           return '❄ Cold — decay ' + (n.decayScore||0);
+        if(n.velocityLabel==='Cooling')    return '↓ Cooling — engagement dropping';
+        return n.title||'';
+    }
+
+    handleCampChip(e) {
+        const f=e.currentTarget.dataset.filter;
+        this.campActiveChips = this.campActiveChips.includes(f)
+            ? this.campActiveChips.filter(c=>c!==f)
+            : [...this.campActiveChips,f];
+        this._applyChipFilter();
+    }
+
+    handleCampSelectAll() { this.campActiveChips=['cooling','cold','dark']; this._autoSelectAtRisk(); }
+
+    _applyChipFilter() {
+        const chips=this.campActiveChips;
+        const filtered=this._allNodes.filter(n=>{
+            if(chips.includes('cooling')&&n.velocityLabel==='Cooling') return true;
+            if(chips.includes('cold')&&(n.decayScore||0)<40)           return true;
+            if(chips.includes('dark')&&(n.totalActivities||0)===0)     return true;
+            return false;
+        });
+        this.campSelectedIds      = filtered.map(n=>n.contactId);
+        this.campSelectedContacts = filtered.map(n=>({
+            contactId:n.contactId, name:n.name, initials:n.initials, title:n.title||'',
+            riskLabel:this._riskLabel(n),
+            avStyle:`background:${this._nc(n.nodeType)}22;color:${this._nc(n.nodeType)};border:1px solid ${this._nc(n.nodeType)}44`
+        }));
+        this.campAutoLabel = `${filtered.length} contact${filtered.length===1?'':'s'} selected`;
+    }
+
+    async _loadExistingCampaigns() {
+        this.campLoading=true;
+        try {
+            this.existingCampaigns = await getRecentCampaigns();
+        } catch(e) {
+            this.dispatchEvent(new ShowToastEvent({ title:'Could not load campaigns', message:e.body?e.body.message:e.message, variant:'warning' }));
+        } finally { this.campLoading=false; }
+    }
+
+    handleCampModeToggle(e) { this.campMode=e.currentTarget.dataset.mode; this.campLastAdded=''; this.campLastId=''; }
+
+    handleCampPick(e) {
+        this.campPickedId=e.target.value;
+        const opt=e.target.options[e.target.selectedIndex];
+        this.campPickedName=opt?opt.text:'';
+        this.campLastAdded=''; this.campLastId='';
+    }
+
+    handleNewCampName(e)  { this.newCampName=e.target.value; }
+    handleNewCampType(e)  { this.newCampType=e.target.value; }
+    handleNewCampStart(e) { this.newCampStart=e.target.value; }
+    handleNewCampEnd(e)   { this.newCampEnd=e.target.value; }
+    handleCampStatus(e)   { this.campMemberStatus=e.target.value; }
+    handleCampStatusBtn(e){ this.campMemberStatus=e.currentTarget.dataset.status; }
+
+    handleCampDeselect(e) {
+        const id=e.currentTarget.dataset.id;
+        this.campSelectedIds      = this.campSelectedIds.filter(x=>x!==id);
+        this.campSelectedContacts = this.campSelectedContacts.filter(c=>c.contactId!==id);
+    }
+
+    handleCampClearSelection() {
+        this.campSelectedIds=[]; this.campSelectedContacts=[];
+        this.campAutoLabel=''; this.campActiveChips=[];
+    }
+
+    async handleCampAdd() {
+        try {
+            let campaignId=this.campPickedId, campaignName=this.campPickedName;
+            if(this.campMode==='new') {
+                campaignId=await createCampaign({ campName:this.newCampName.trim(), campType:this.newCampType, campStatus:'Planning', startDate:this.newCampStart||null, endDate:this.newCampEnd||null });
+                campaignName=this.newCampName.trim();
+            }
+            if(!campaignId) { this.dispatchEvent(new ShowToastEvent({ title:'No campaign selected', message:'Select or create a campaign first.', variant:'warning' })); return; }
+            const result=await addContactsToCampaign({ campaignId, contactIdsJson:JSON.stringify(this.campSelectedIds), memberStatus:this.campMemberStatus });
+            this.campLastAdded=result; this.campLastId=campaignId; this.campDot=false;
+            this.dispatchEvent(new ShowToastEvent({ title:`Added to "${campaignName}"`, message:result, variant:'success' }));
+            this.campSelectedIds=[]; this.campSelectedContacts=[];
+        } catch(e) {
+            this.dispatchEvent(new ShowToastEvent({ title:'Campaign add failed', message:e.body?e.body.message:e.message, variant:'error', mode:'sticky' }));
+        }
+    }
+
+    handleOpenCampaign(e) {
+        const id=e.currentTarget.dataset.id;
+        if(!id) return;
+        this[NavigationMixin.Navigate]({ type:'standard__recordPage', attributes:{ recordId:id, objectApiName:'Campaign', actionName:'view' } }, true);
+    }
+
+
+
+    _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    _err(msg) { this.hasError=true; this.errorMsg=msg; this.isLoading=false; }
 }

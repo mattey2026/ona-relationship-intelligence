@@ -62,6 +62,7 @@ public with sharing class ONAController {
             Integer clusters = applyCentrality(nodes, edges);
             applyInfluence(nodes);
             applyPhase2Scores(nodes, edges); // alg 5, 6, 7
+            applyChampionRisk(nodes);        // v4.6 — needs influence + velocity + decay all final
             populateLastActivity(nodes);      // v4.1 — last activity badge
             ONAModels.AccountIntelligence ai = buildAccountIntelligence(nodes);
             return JSON.serialize(buildPayload(nodes, edges, 'account', acc.Name, clusters, ai));
@@ -85,6 +86,7 @@ public with sharing class ONAController {
             Integer clusters = applyCentrality(nodes, edges);
             applyInfluence(nodes);
             applyPhase2Scores(nodes, edges);
+            applyChampionRisk(nodes); // v4.6
             populateLastActivity(nodes); // v4.1 — last activity badge
             for (ONAModels.ContactNode n : nodes)
                 if (n.nodeType != 'hub' && n.accountId != anchorId) n.nodeType = 'bridge';
@@ -124,6 +126,196 @@ public with sharing class ONAController {
         String q = '%' + (searchTerm != null ? searchTerm : '') + '%';
         return [SELECT Id, Name, Industry, BillingCity FROM Account
                 WHERE Name LIKE :q AND IsDeleted = false ORDER BY Name LIMIT 20];
+    }
+
+    // ── ABM Bubble Chart Data (v4.7) ─────────────────────────────────────────
+    // Lightweight per-account data fetch for the ABM Intelligence view.
+    // Returns one row per account combining:
+    //   - ONA computed scores (Coverage, Multi-Thread) from a graph build
+    //   - Open pipeline value from Opportunity
+    //   - Contact count, hub count, whitespace gap count
+    //   - Champion Risk flag (any contact flagged)
+    //   - ABM Play recommendation (decision-tree based on scores)
+    // Called ONLY when the ABM view opens — not on every graph load.
+    @AuraEnabled(cacheable=false)
+    public static List<Map<String,Object>> getABMBubbleData() {
+        // ── 1. Accounts with contacts ─────────────────────────────────────────
+        List<Account> accounts = [
+            SELECT Id, Name, Industry, AnnualRevenue, Type
+            FROM   Account
+            WHERE  Id IN (SELECT AccountId FROM Contact WHERE AccountId != null)
+            ORDER  BY Name LIMIT 30
+        ];
+        Set<Id> acctIds = new Map<Id,Account>(accounts).keySet();
+
+        // ── 2. Open pipeline per account (1 SOQL) ─────────────────────────────
+        Map<Id,Decimal> pipeline = new Map<Id,Decimal>();
+        for (AggregateResult ar : [
+            SELECT AccountId, SUM(Amount) total
+            FROM   Opportunity
+            WHERE  IsClosed = false AND AccountId IN :acctIds
+            GROUP  BY AccountId
+        ]) { pipeline.put((Id)ar.get('AccountId'), (Decimal)ar.get('total')); }
+
+        // ── 3. All contacts for all accounts (1 SOQL) ─────────────────────────
+        Map<Id,List<Contact>> contactsByAcct = new Map<Id,List<Contact>>();
+        for (Id aid : acctIds) contactsByAcct.put(aid, new List<Contact>());
+        for (Contact c : [
+            SELECT Id, Name, Title, Department, Email, Phone, MobilePhone,
+                   AccountId, ReportsToId, MailingCountry
+            FROM   Contact
+            WHERE  AccountId IN :acctIds AND IsDeleted = false
+        ]) {
+            if (contactsByAcct.containsKey(c.AccountId))
+                contactsByAcct.get(c.AccountId).add(c);
+        }
+
+        // ── 4. Recent activity counts per contact (1 SOQL) ────────────────────
+        Map<Id,Integer> taskCount = new Map<Id,Integer>();
+        Date ninetyDaysAgo = Date.today().addDays(-90);
+        for (AggregateResult ar : [
+            SELECT WhoId, COUNT(Id) cnt
+            FROM   Task
+            WHERE  WhoId IN (SELECT Id FROM Contact WHERE AccountId IN :acctIds)
+            AND    ActivityDate >= :ninetyDaysAgo
+            AND    IsClosed = true
+            GROUP  BY WhoId
+        ]) { taskCount.put((Id)ar.get('WhoId'), (Integer)ar.get('cnt')); }
+
+        Map<Id,Integer> prevTaskCount = new Map<Id,Integer>();
+        Date oneEightyDaysAgo = Date.today().addDays(-180);
+        for (AggregateResult ar : [
+            SELECT WhoId, COUNT(Id) cnt
+            FROM   Task
+            WHERE  WhoId IN (SELECT Id FROM Contact WHERE AccountId IN :acctIds)
+            AND    ActivityDate >= :oneEightyDaysAgo
+            AND    ActivityDate < :ninetyDaysAgo
+            AND    IsClosed = true
+            GROUP  BY WhoId
+        ]) { prevTaskCount.put((Id)ar.get('WhoId'), (Integer)ar.get('cnt')); }
+
+        // ── 5. Department coverage per account ────────────────────────────────
+        // Departments with ≥3 activities = engaged; else = whitespace gap
+        Map<Id,Map<String,Integer>> deptActivity = new Map<Id,Map<String,Integer>>();
+        for (Id aid : acctIds) deptActivity.put(aid, new Map<String,Integer>());
+
+        // ── 6. Build result rows ──────────────────────────────────────────────
+        List<Map<String,Object>> result = new List<Map<String,Object>>();
+
+        for (Account acc : accounts) {
+            List<Contact> contacts = contactsByAcct.get(acc.Id) != null ? contactsByAcct.get(acc.Id) : new List<Contact>();
+            Integer contactCnt = contacts.size();
+            if (contactCnt == 0) continue;
+
+            // Compute per-contact scores inline (simplified version of Alg 5/6)
+            Integer totalActivity = 0, totalRecent = 0, totalPrev = 0;
+            Integer coolingCnt = 0, growingCnt = 0;
+            Boolean champRisk = false;
+            String topContact = '';
+            Integer topActivity = 0;
+            Set<String> engagedDepts = new Set<String>();
+            Set<String> allDepts     = new Set<String>();
+            Integer missingPhone = 0, missingEmail = 0, missingTitle = 0;
+
+            for (Contact c : contacts) {
+                Integer recent = taskCount.get(c.Id) != null ? taskCount.get(c.Id) : 0;
+                Integer prev   = prevTaskCount.get(c.Id) != null ? prevTaskCount.get(c.Id) : 0;
+                totalRecent += recent;
+                totalPrev   += prev;
+                totalActivity += recent + prev;
+
+                // Simple velocity
+                if      (recent > prev * 1.15 && recent > 0) growingCnt++;
+                else if (recent < prev * 0.85 && prev > 0)   coolingCnt++;
+
+                // Top contact by activity
+                if (recent + prev > topActivity) {
+                    topActivity = recent + prev;
+                    topContact  = c.Name;
+                }
+
+                // Department coverage
+                if (String.isNotBlank(c.Department)) {
+                    allDepts.add(c.Department);
+                    if (recent >= 3) engagedDepts.add(c.Department);
+                }
+
+                // Data completeness
+                if (c.Phone == null && c.MobilePhone == null) missingPhone++;
+                if (c.Email == null)  missingEmail++;
+                if (c.Title == null)  missingTitle++;
+            }
+
+            Integer wsGaps = allDepts.size() - engagedDepts.size();
+
+            // Coverage Score — simplified: % contacts with ≥1 recent activity
+            Integer activeContacts = 0;
+            for (Contact c : contacts) {
+                if ((taskCount.get(c.Id) != null ? taskCount.get(c.Id) : 0) >= 1) activeContacts++;
+            }
+            Integer cov = contactCnt > 0 ? Math.min(100, (activeContacts * 100) / contactCnt) : 0;
+
+            // Multi-thread: if top contact has >60% of all activity = single-threaded
+            Integer mt = 100;
+            if (totalActivity > 0 && topActivity > 0) {
+                Integer topPct = (topActivity * 100) / totalActivity;
+                mt = topPct > 60 ? Math.max(0, 100 - topPct) : Math.min(100, 100 - topPct + 40);
+            }
+
+            // Champion Risk: top contact cooling?
+            if (topActivity > 0) {
+                for (Contact c : contacts) {
+                    Integer recent = taskCount.get(c.Id) != null ? taskCount.get(c.Id) : 0;
+                    Integer prev   = prevTaskCount.get(c.Id) != null ? prevTaskCount.get(c.Id) : 0;
+                    if (c.Name == topContact && recent < prev * 0.5 && prev >= 3) {
+                        champRisk = true;
+                    }
+                }
+            }
+
+            Integer score  = (cov + mt) / 2;
+            Decimal pipe   = pipeline.get(acc.Id) != null ? pipeline.get(acc.Id) : 0;
+
+            // ABM Play recommendation
+            String play, playIcon, playColor;
+            if      (champRisk)          { play='Champion Save';      playIcon='⚠';  playColor='#dc2626'; }
+            else if (cov < 40 && pipe>0) { play='Relationship First'; playIcon='🔗'; playColor='#d97706'; }
+            else if (cov>=70 && mt>=70)  { play='Expand & Upsell';    playIcon='🚀'; playColor='#059669'; }
+            else if (cov>=70 && mt<40)   { play='Multi-Thread Now';   playIcon='🕸'; playColor='#0369a1'; }
+            else if (cov<40 && pipe==0)  { play='Qualify Account';    playIcon='🎯'; playColor='#94a3b8'; }
+            else if (wsGaps > 2)         { play='Expand Coverage';    playIcon='📡'; playColor='#4338ca'; }
+            else                         { play='Nurture & Warm Up';  playIcon='🌱'; playColor='#059669'; }
+
+            result.add(new Map<String,Object>{
+                'id'                => acc.Id,
+                'name'              => acc.Name,
+                'industry'          => acc.Industry != null ? acc.Industry : 'Unknown',
+                'type'              => acc.Type != null ? acc.Type : '',
+                'annualRevenue'     => acc.AnnualRevenue != null ? acc.AnnualRevenue : 0,
+                'openPipeline'      => pipe,
+                'contactCount'      => contactCnt,
+                'coverageScore'     => cov,
+                'multiThreadScore'  => mt,
+                'overallScore'      => score,
+                'whitespaceGaps'    => wsGaps,
+                'championRisk'      => champRisk,
+                'topContact'        => topContact,
+                'topInfluence'      => topActivity,
+                'velocityBreakdown' => growingCnt + ' Growing · ' + (contactCnt-growingCnt-coolingCnt) + ' Stable · ' + coolingCnt + ' Cooling',
+                'abmPlay'           => play,
+                'abmPlayIcon'       => playIcon,
+                'abmPlayColor'      => playColor,
+                'readiness'         => score>=70?'Ready':score>=40?'Warming':'At Risk'
+            });
+        }
+        return result;
+    }
+
+    private static Integer countWhitespace(List<ONAModels.WhitespaceItem> ws) {
+        if (ws == null) return 0;
+        Integer c = 0;
+        for (ONAModels.WhitespaceItem w : ws) if (!w.engaged) c++;
+        return c;
     }
 
     // ── Unified search — Accounts AND Contacts (v4.3) ────────────────────────
@@ -1088,12 +1280,12 @@ public with sharing class ONAController {
 
     // ── Data fetching ─────────────────────────────────────────────────────────
     private static List<Contact> fetchAccountContacts(Id accountId) {
-        return [SELECT Id,Name,Title,Department,Email,AccountId,Account.Name,ReportsToId,MailingCountry
+        return [SELECT Id,Name,Title,Department,Email,Phone,MobilePhone,AccountId,Account.Name,ReportsToId,MailingCountry
                 FROM Contact WHERE AccountId=:accountId AND IsDeleted=false ORDER BY Name LIMIT 200];
     }
 
     private static List<Contact> fetchMultiAccountContacts(Set<Id> acctIds) {
-        return [SELECT Id,Name,Title,Department,Email,AccountId,Account.Name,ReportsToId,MailingCountry
+        return [SELECT Id,Name,Title,Department,Email,Phone,MobilePhone,AccountId,Account.Name,ReportsToId,MailingCountry
                 FROM Contact WHERE AccountId IN :acctIds AND IsDeleted=false
                 ORDER BY Account.Name,Name LIMIT 1000];
     }
@@ -1461,6 +1653,53 @@ public with sharing class ONAController {
         // ── Helpers ───────────────────────────────────────────────────────────────
     private static void applyInfluence(List<ONAModels.ContactNode> nodes) {
         for(ONAModels.ContactNode n : nodes) n.influenceScore = alg2Influence(n);
+    }
+
+    // ── Champion Risk (v4.6) ─────────────────────────────────────────────────
+    // A "Champion" is high-influence RELATIVE TO THIS ACCOUNT + previously
+    // engaged. Risk = that profile flipping to Cooling.
+    //
+    // v4.6.1 fix: an absolute Influence threshold (originally 60) was
+    // miscalibrated — real org data showed CFO-level contacts scoring 40,
+    // since Influence depends heavily on connection density which varies a
+    // lot by account size. Switched to RELATIVE ranking: top 40% of
+    // influence scores within the account, which self-calibrates to
+    // whatever scale this org's data actually produces. This is also more
+    // portable across different buyer orgs than a hardcoded magic number.
+    private static final Decimal CHAMPION_INFLUENCE_PERCENTILE = 0.60; // top 40% = above the 60th percentile
+    private static final Integer CHAMPION_DECAY_CEILING        = 60;  // below this = relationship genuinely cooling, not a blip
+    private static final Integer CHAMPION_MIN_NODES            = 3;   // skip relative ranking on tiny accounts — not enough signal
+
+    private static void applyChampionRisk(List<ONAModels.ContactNode> nodes) {
+        if (nodes.size() < CHAMPION_MIN_NODES) {
+            for (ONAModels.ContactNode n : nodes) { n.isChampionRisk = false; n.championRiskReason = ''; }
+            return;
+        }
+
+        // Build the influence distribution for this account/graph and find
+        // the percentile cutoff — self-calibrating per account rather than
+        // a fixed number that breaks across accounts of different sizes.
+        List<Integer> scores = new List<Integer>();
+        for (ONAModels.ContactNode n : nodes) scores.add(n.influenceScore);
+        scores.sort();
+        Integer cutoffIndex = (Integer) Math.floor(scores.size() * CHAMPION_INFLUENCE_PERCENTILE);
+        cutoffIndex = Math.min(cutoffIndex, scores.size() - 1);
+        Integer influenceCutoff = scores[cutoffIndex];
+
+        for (ONAModels.ContactNode n : nodes) {
+            Boolean highInfluence = n.influenceScore >= influenceCutoff && n.influenceScore > 0;
+            Boolean cooling       = n.velocityLabel == 'Cooling';
+            Boolean genuinelyCold = n.decayScore < CHAMPION_DECAY_CEILING;
+
+            if (highInfluence && cooling && genuinelyCold) {
+                n.isChampionRisk     = true;
+                n.championRiskReason = 'Top-tier influence for this account (' + n.influenceScore +
+                    ') — engagement cooling, decay score ' + n.decayScore + '. Re-engage soon.';
+            } else {
+                n.isChampionRisk     = false;
+                n.championRiskReason = '';
+            }
+        }
     }
 
     private static List<ONAModels.ContactNode> buildNodes(List<Contact> contacts) {

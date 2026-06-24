@@ -22,7 +22,7 @@
                 <span class="ona-search-icon">⌕</span>
                 <input  class="ona-search"
                         type="text"
-                        placeholder="Search account..."
+                        placeholder="Search accounts or contacts..."
                         value={searchTerm}
                         oninput={handleSearch}
                         onfocus={handleSearchFocus}
@@ -38,18 +38,22 @@
                 </template>
                 <template if:true={showDropdown}>
                     <div class="ona-dropdown">
-                        <template for:each={accountResults} for:item="acc">
-                            <div key={acc.Id} class="ona-ditem"
-                                 data-id={acc.Id} data-name={acc.Name}
-                                 onmousedown={selectAccount}>
+                        <template for:each={searchResults} for:item="res">
+                            <div key={res.id} class={res.rowClass}
+                                 data-id={res.id}
+                                 data-name={res.name}
+                                 data-type={res.type}
+                                 data-accountid={res.accountId}
+                                 data-accountname={res.accountName}
+                                 onmousedown={selectResult}>
                                 <div class="ona-ditem-left">
-                                    <div class="ona-ditem-av">{acc.nameInitial}</div>
+                                    <div class="ona-ditem-av">{res.initial}</div>
                                     <div>
-                                        <div class="ona-dname">{acc.Name}</div>
-                                        <div class="ona-dindustry">{acc.Industry}</div>
+                                        <div class="ona-dname">{res.name}</div>
+                                        <div class="ona-dindustry">{res.subtitle}</div>
                                     </div>
                                 </div>
-                                <span class="ona-ditem-load">Load →</span>
+                                <span class="ona-ditem-type">{res.icon}</span>
                             </div>
                         </template>
                     </div>
@@ -59,9 +63,17 @@
             <div class="ona-topbar-actions">
                 <button class="ona-theme-btn" onclick={handleTheme} title="Toggle theme">{themeIcon}</button>
                 <button class="ona-hbtn" onclick={handleRefresh}>↺ Refresh</button>
+                <button class={activityBadgeBtnClass} onclick={handleToggleActivity} title="Toggle last activity date on nodes">
+                    ⊙ Last Activity
+                </button>
+
                 <button class={summaryBellClass} onclick={toggleSummary} title="Relationship Summary">
                     <span>🔔</span>
                     <template if:true={bellDot}><span class="ona-bell-dot"></span></template>
+                </button>
+                <button class={campBtnClass} onclick={handleOpenCampPanel} title="Add contacts to campaign">
+                    <span>📢</span>
+                    <template if:true={campDot}><span class="ona-bell-dot"></span></template>
                 </button>
                 <button class="ona-hbtn ona-guide-btn" onclick={handleGuide}>? Guide</button>
             </div>
@@ -100,6 +112,14 @@
                         <span class="ona-vc-sub">Graph intelligence</span>
                     </div>
                     <span class="ona-vc-new" style="background:#059669">New</span>
+                </button>
+                <button class={compareCardClass} onclick={handleCompareMode}>
+                    <span class="ona-vc-icon">⇌</span>
+                    <div class="ona-vc-text">
+                        <span class="ona-vc-title">Compare</span>
+                        <span class="ona-vc-sub">Side-by-side accounts</span>
+                    </div>
+                    <span class="ona-vc-new" style="background:#4338ca">New</span>
                 </button>
             </div>
 
@@ -162,10 +182,10 @@
             <div class="ona-lps">
                 <span class="ona-lpt">Network metrics</span>
                 <div class="ona-kgrid">
-                    <div class="ona-kpi"><div class="ona-kval">{stats.totalContacts}</div><div class="ona-klbl">Contacts</div></div>
-                    <div class="ona-kpi"><div class="ona-kval">{stats.totalEdges}</div><div class="ona-klbl">Relationships</div></div>
-                    <div class="ona-kpi"><div class="ona-kval">{stats.hubCount}</div><div class="ona-klbl">Hubs</div></div>
-                    <div class="ona-kpi"><div class="ona-kval">{stats.clusterCount}</div><div class="ona-klbl">Clusters</div></div>
+                    <div class="ona-kpi"><div class="ona-kval">{stats.totalContacts}</div><div class="ona-klbl">Contacts<c-ona-help-tip term="contacts" position="right"></c-ona-help-tip></div></div>
+                    <div class="ona-kpi"><div class="ona-kval">{stats.totalEdges}</div><div class="ona-klbl">Relationships<c-ona-help-tip term="relationships" position="right"></c-ona-help-tip></div></div>
+                    <div class="ona-kpi"><div class="ona-kval">{stats.hubCount}</div><div class="ona-klbl">Hubs<c-ona-help-tip term="hubs" position="right"></c-ona-help-tip></div></div>
+                    <div class="ona-kpi"><div class="ona-kval">{stats.clusterCount}</div><div class="ona-klbl">Clusters<c-ona-help-tip term="clusters" position="right"></c-ona-help-tip></div></div>
                 </div>
             </div>
 
@@ -173,19 +193,25 @@
             <div class="ona-lps">
                 <span class="ona-lpt">Account intelligence <span class="ona-lpt-badge">New</span></span>
                 <div class="ona-ai-metric">
-                    <div class="ona-ai-label"><span>Coverage score</span><span class="ona-ai-badge" style={covBadgeStyle}>{accountIntel.coverageBadge}</span></div>
+                    <div class="ona-ai-label"><span>Coverage score<c-ona-help-tip term="coverage-score" position="right"></c-ona-help-tip></span><span class="ona-ai-badge" style={covBadgeStyle}>{accountIntel.coverageBadge}</span></div>
                     <div class="ona-ai-val">{accountIntel.coverageScore}%</div>
                     <div class="ona-sbar"><div class="ona-sfill" style={covBarStyle}></div></div>
                     <div class="ona-ai-desc">{covDesc}</div>
+                    <template if:true={trendHasHistory}>
+                        <div class={covTrendClass}>{covTrendLabel}</div>
+                    </template>
                 </div>
                 <div class="ona-ai-metric">
-                    <div class="ona-ai-label"><span>Multi-thread risk</span><span class="ona-ai-badge" style={mtBadgeStyle}>{accountIntel.multiThreadBadge}</span></div>
+                    <div class="ona-ai-label"><span>Multi-thread risk<c-ona-help-tip term="multi-thread" position="right"></c-ona-help-tip></span><span class="ona-ai-badge" style={mtBadgeStyle}>{accountIntel.multiThreadBadge}</span></div>
                     <div class="ona-ai-val">{accountIntel.multiThreadScore}%</div>
                     <div class="ona-sbar"><div class="ona-sfill" style={mtBarStyle}></div></div>
                     <div class="ona-ai-desc">{mtDesc}</div>
+                    <template if:true={trendHasHistory}>
+                        <div class={mtTrendClass}>{mtTrendLabel}</div>
+                    </template>
                 </div>
                 <div style="margin-top:6px">
-                    <div class="ona-ws-title">Whitespace gaps</div>
+                    <div class="ona-ws-title">Whitespace gaps<c-ona-help-tip term="whitespace" position="right"></c-ona-help-tip></div>
                     <template for:each={whitespace} for:item="ws">
                         <div key={ws.department} class="ona-ws-item">
                             <span class="ona-ws-dept">{ws.department}</span>
@@ -268,6 +294,30 @@
                     <div class="ona-tsi"><span class="ona-tsv">{tip.con}</span><span class="ona-tsl">Connections</span></div>
                 </div>
                 <div class="ona-tv" style={tip.velStyle}>{tip.velArrow} {tip.velLabel}</div>
+                <template if:true={tip.championRisk}>
+                    <div class="ona-tip-champ">⚠ Champion Risk — {tip.championReason}</div>
+                </template>
+
+                <!-- Seller Interaction Layer (v4.2) -->
+                <div class="ona-tip-divider"></div>
+                <div class="ona-tip-seller-hdr">
+                    <span class="ona-tip-seller-ico">👤</span>
+                    <span class="ona-tip-seller-lbl">Team Interactions</span>
+                </div>
+                <template if:true={tip.hasSellers}>
+                    <template for:each={tip.sellers} for:item="s">
+                        <div key={s.repId} class="ona-tip-seller-row">
+                            <div class="ona-tip-seller-dot" style={s.dotStyle}></div>
+                            <span class="ona-tip-seller-name">{s.repName}</span>
+                            <span class="ona-tip-seller-when">{s.whenLabel}</span>
+                            <span class="ona-tip-seller-count">{s.countLabel}</span>
+                        </div>
+                    </template>
+                    <div class="ona-tip-seller-footer">Most active: {tip.mostActive}</div>
+                </template>
+                <template if:false={tip.hasSellers}>
+                    <div class="ona-tip-seller-empty">No team interactions logged</div>
+                </template>
             </div>
             <div class="ona-zctrls">
                 <button class="ona-zbtn" onclick={handleZoomIn}>+</button>
@@ -283,7 +333,7 @@
                 <div class="ona-iph">
                     <div class="ona-ipav" style={avStyle}>{contact.initials}</div>
                     <div style="flex:1;min-width:0">
-                        <div class="ona-ipname">{contact.name}</div>
+                        <div class="ona-ipname">{contact.name} <span class={compBadgeClass} title={compBadgeTitle}>{compBadgeIcon}</span></div>
                         <div class="ona-iprole">{contact.title}</div>
                         <div class="ona-ipacct">{contact.accountName}</div>
                         <div class="ona-ipdept">{contact.department}</div>
@@ -293,16 +343,53 @@
                 </div>
                 <div class="ona-rpanel-scroll">
                     <div class="ona-ips">
+                        <span class="ona-ipst">Contact details</span>
+                        <div class={cdSummaryClass}>{cdSummaryLabel}</div>
+                        <div class="ona-cd-grid">
+                            <div class="ona-cd-cell" data-field="phone" onclick={handleCopyField}>
+                                <span class="ona-cd-ico">📞</span>
+                                <div class="ona-cd-cell-text">
+                                    <span class="ona-cd-cell-lbl">Phone</span>
+                                    <span class={cdPhoneClass}>{cdPhoneValue}</span>
+                                </div>
+                            </div>
+                            <div class="ona-cd-cell" data-field="mobile" onclick={handleCopyField}>
+                                <span class="ona-cd-ico">📱</span>
+                                <div class="ona-cd-cell-text">
+                                    <span class="ona-cd-cell-lbl">Mobile</span>
+                                    <span class={cdMobileClass}>{cdMobileValue}</span>
+                                </div>
+                            </div>
+                            <div class="ona-cd-cell" data-field="email" onclick={handleCopyField}>
+                                <span class="ona-cd-ico">📧</span>
+                                <div class="ona-cd-cell-text">
+                                    <span class="ona-cd-cell-lbl">Email</span>
+                                    <span class={cdEmailClass}>{cdEmailValue}</span>
+                                </div>
+                            </div>
+                            <div class="ona-cd-cell" data-field="title" onclick={handleCopyField}>
+                                <span class="ona-cd-ico">💼</span>
+                                <div class="ona-cd-cell-text">
+                                    <span class="ona-cd-cell-lbl">Title</span>
+                                    <span class={cdTitleClass}>{cdTitleValue}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <template if:true={cdCopiedField}>
+                            <div class="ona-cd-toast">Copied {cdCopiedField} ✓</div>
+                        </template>
+                    </div>
+                    <div class="ona-ips">
                         <span class="ona-ipst">ONA scores</span>
                         <div class="ona-sgrid">
-                            <div class="ona-sc"><div class="ona-scv">{contact.influenceScore}</div><div class="ona-scl">Influence</div><div class="ona-sbar"><div class="ona-sfill" style={infBarStyle}></div></div><div class="ona-scd">{contact.influenceDesc}</div></div>
-                            <div class="ona-sc"><div class="ona-scv">{contact.centralityScore}</div><div class="ona-scl">Centrality</div><div class="ona-sbar"><div class="ona-sfill" style={cenBarStyle}></div></div><div class="ona-scd">{contact.centralityDesc}</div></div>
-                            <div class="ona-sc ona-sc-new-green"><div class="ona-scv">{contact.decayScore}</div><div class="ona-scl">Decay score <span class="ona-score-badge ona-score-badge-green">New</span></div><div class="ona-sbar"><div class="ona-sfill" style={decBarStyle}></div></div><div class="ona-scd">{contact.decayDesc}</div></div>
-                            <div class="ona-sc ona-sc-new-purple"><div class="ona-scv">{contact.betweennessScore}</div><div class="ona-scl">Betweenness <span class="ona-score-badge ona-score-badge-purple">New</span></div><div class="ona-sbar"><div class="ona-sfill" style={betwBarStyle}></div></div><div class="ona-scd">{contact.betweennessDesc}</div></div>
+                            <div class="ona-sc"><div class="ona-scv">{contact.influenceScore}</div><div class="ona-scl">Influence<c-ona-help-tip term="influence" position="top"></c-ona-help-tip></div><div class="ona-sbar"><div class="ona-sfill" style={infBarStyle}></div></div><div class="ona-scd">{contact.influenceDesc}</div></div>
+                            <div class="ona-sc"><div class="ona-scv">{contact.centralityScore}</div><div class="ona-scl">Centrality<c-ona-help-tip term="centrality" position="top"></c-ona-help-tip></div><div class="ona-sbar"><div class="ona-sfill" style={cenBarStyle}></div></div><div class="ona-scd">{contact.centralityDesc}</div></div>
+                            <div class="ona-sc ona-sc-new-green"><div class="ona-scv">{contact.decayScore}</div><div class="ona-scl">Decay score<c-ona-help-tip term="decay-score" position="top"></c-ona-help-tip> <span class="ona-score-badge ona-score-badge-green">New</span></div><div class="ona-sbar"><div class="ona-sfill" style={decBarStyle}></div></div><div class="ona-scd">{contact.decayDesc}</div></div>
+                            <div class="ona-sc ona-sc-new-purple"><div class="ona-scv">{contact.betweennessScore}</div><div class="ona-scl">Betweenness<c-ona-help-tip term="betweenness" position="top"></c-ona-help-tip> <span class="ona-score-badge ona-score-badge-purple">New</span></div><div class="ona-sbar"><div class="ona-sfill" style={betwBarStyle}></div></div><div class="ona-scd">{contact.betweennessDesc}</div></div>
                         </div>
                     </div>
                     <div class="ona-ips">
-                        <span class="ona-ipst">Velocity trend <span class="ona-lpt-badge">New</span></span>
+                        <span class="ona-ipst">Velocity trend<c-ona-help-tip term="velocity" position="right"></c-ona-help-tip> <span class="ona-lpt-badge">New</span></span>
                         <div class="ona-vel-row">
                             <span class="ona-vel-big" style={velBigStyle}>{contact.velocityArrow}</span>
                             <div><div class="ona-vel-label" style={velLabelStyle}>{contact.velocityLabel}</div><div class="ona-vel-sub">Last 90 days vs prior 90 days</div></div>
@@ -378,6 +465,14 @@
     <!-- ══ PORTFOLIO VIEW PANE ══════════════════════════════════════════ -->
     <template if:true={isPortfolioMode}>
     <div class="ona-port-pane">
+
+        <!-- Portfolio sub-tabs -->
+        <div class="ona-port-tabs">
+            <button class={portTabListClass} onclick={handlePortTabList}>📋 Account List</button>
+            <button class={portTabABMClass}  onclick={handlePortTabABM}>🎯 ABM Map</button>
+        </div>
+
+        <template if:true={portTabIslist}>
         <div class="ona-port-body">
 
             <!-- Left: ranked account list -->
@@ -421,6 +516,15 @@
                                     </div>
                                 </div>
                             </div>
+                            <!-- Handover Pack button — outer flex sibling of body -->
+                            <button
+                                style="flex-shrink:0;align-self:center;margin:0 8px;padding:4px 8px;background:rgba(180,83,9,.12);border:1px solid rgba(180,83,9,.4);border-radius:4px;font-size:12px;cursor:pointer;color:#b45309;line-height:1"
+                                data-id={acc.id}
+                                data-name={acc.name}
+                                onclick={handlePortfolioHandoverPack}
+                                title="Download Handover Pack PDF">
+                                📄
+                            </button>
                         </div>
                     </template>
                 </div>
@@ -561,6 +665,147 @@
             </template>
 
         </div>
+        </template>
+
+        <!-- ── ABM MAP VIEW ─────────────────────────────────────────── -->
+        <template if:true={portTabIsABM}>
+        <div class="ona-abm-inner">
+
+            <!-- ── Header ──────────────────────────────────────────────── -->
+            <div class="ona-abm-hdr">
+                <div class="ona-abm-hdr-left">
+                    <span class="ona-abm-title">🎯 Account Targeting Map</span>
+                    <span class="ona-abm-sub">{abmStats.total} accounts · X = relationship strength · Y = revenue at stake · Bubble = contacts known · Click any account</span>
+                </div>
+                <div class="ona-abm-hdr-right">
+                    <div class="ona-abm-legend">
+                        <span class="ona-abm-leg-item"><span class="ona-abm-leg-dot" style="background:#059669"></span>Ready for ABM</span>
+                        <span class="ona-abm-leg-item"><span class="ona-abm-leg-dot" style="background:#d97706"></span>Needs warming</span>
+                        <span class="ona-abm-leg-item"><span class="ona-abm-leg-dot" style="background:#dc2626"></span>Build first</span>
+                        <span class="ona-abm-leg-item"><span class="ona-abm-leg-dot" style="background:#dc2626;box-shadow:0 0 0 3px rgba(220,38,38,.2)"></span>Champion at risk</span>
+                    </div>
+                    <div class="ona-abm-kpis">
+                        <div class="ona-abm-kpi"><span class="ona-abm-kv" style="color:#059669">{abmStats.ready}</span><span class="ona-abm-kl">Ready</span></div>
+                        <div class="ona-abm-kpi"><span class="ona-abm-kv" style="color:#d97706">{abmStats.warming}</span><span class="ona-abm-kl">Warming</span></div>
+                        <div class="ona-abm-kpi"><span class="ona-abm-kv" style="color:#dc2626">{abmStats.atRisk}</span><span class="ona-abm-kl">Build First</span></div>
+                        <div class="ona-abm-kpi"><span class="ona-abm-kv">{abmStats.champRisk}</span><span class="ona-abm-kl">⚠ At Risk</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Loading ─────────────────────────────────────────────── -->
+            <template if:true={abmLoading}>
+                <div class="ona-abm-loading">
+                    <div class="ona-abm-spinner"></div>
+                    <div class="ona-abm-loading-txt">Analysing relationship health across all accounts…</div>
+                </div>
+            </template>
+
+            <!-- ── Main: chart + action panel ─────────────────────────── -->
+            <template if:false={abmLoading}>
+            <div class="ona-abm-body">
+
+                <!-- Bubble chart -->
+                <div class="ona-abm-chart-wrap">
+                    <div class="ona-abm-chart" lwc:ref="abmChart"></div>
+                    <!-- Hover tooltip -->
+                    <div class={abmTipClass} lwc:ref="abmTip">
+                        <div class="ona-abm-tip-play" style={abmTip.playStyle}>{abmTip.playIcon} {abmTip.play}</div>
+                        <div class="ona-abm-tip-name">{abmTip.name}</div>
+                        <div class="ona-abm-tip-industry">{abmTip.industry}</div>
+                        <div class="ona-abm-tip-scores">
+                            <div class="ona-abm-tip-score"><span class="ona-abm-tip-sv" style={abmTip.covStyle}>{abmTip.coverage}%</span><span class="ona-abm-tip-sl">Rel. strength</span></div>
+                            <div class="ona-abm-tip-score"><span class="ona-abm-tip-sv">{abmTip.pipeline}</span><span class="ona-abm-tip-sl">Open pipeline</span></div>
+                            <div class="ona-abm-tip-score"><span class="ona-abm-tip-sv">{abmTip.contacts}</span><span class="ona-abm-tip-sl">Contacts known</span></div>
+                            <div class="ona-abm-tip-score"><span class="ona-abm-tip-sv" style={abmTip.mtStyle}>{abmTip.multiThread}%</span><span class="ona-abm-tip-sl">Multi-thread</span></div>
+                        </div>
+                        <template if:true={abmTip.champRisk}><div class="ona-abm-tip-champ">⚠ Key contact going quiet — act now</div></template>
+                        <div class="ona-abm-tip-click">Click for action plan →</div>
+                    </div>
+                </div>
+
+                <!-- ── Action Panel (replaces ranked list) ─────────────── -->
+                <div class="ona-abm-panel">
+                    <template if:true={abmSelected}>
+
+                        <!-- Account header -->
+                        <div class="ona-abm-panel-hdr">
+                            <div class="ona-abm-panel-av" style={abmSelected.avStyle}>{abmSelected.initials}</div>
+                            <div class="ona-abm-panel-info">
+                                <div class="ona-abm-panel-name">{abmSelected.name}</div>
+                                <div class="ona-abm-panel-ind">{abmSelected.industry}</div>
+                                <div class="ona-abm-panel-play" style={abmSelected.playBadgeStyle}>{abmSelected.abmPlayIcon} {abmSelected.abmPlay}</div>
+                            </div>
+                        </div>
+
+                        <!-- Score tiles -->
+                        <div class="ona-abm-panel-scores">
+                            <div class="ona-abm-score-tile">
+                                <div class="ona-abm-score-v" style={abmSelected.covStyle}>{abmSelected.coverageScore}%</div>
+                                <div class="ona-abm-score-bar"><div class="ona-abm-score-fill" style={abmSelected.covBarStyle}></div></div>
+                                <div class="ona-abm-score-l">Relationship strength<c-ona-help-tip term="relationship-strength" position="right"></c-ona-help-tip></div>
+                            </div>
+                            <div class="ona-abm-score-tile">
+                                <div class="ona-abm-score-v" style={abmSelected.mtStyle}>{abmSelected.multiThreadScore}%</div>
+                                <div class="ona-abm-score-bar"><div class="ona-abm-score-fill" style={abmSelected.mtBarStyle}></div></div>
+                                <div class="ona-abm-score-l">Multi-thread spread<c-ona-help-tip term="multi-thread" position="right"></c-ona-help-tip></div>
+                            </div>
+                            <div class="ona-abm-score-tile">
+                                <div class="ona-abm-score-v">{abmSelected.revenueLabel}</div>
+                                <div class="ona-abm-score-l">Annual revenue<c-ona-help-tip term="annual-revenue" position="right"></c-ona-help-tip></div>
+                            </div>
+                            <div class="ona-abm-score-tile">
+                                <div class="ona-abm-score-v" style="color:#0369a1">{abmSelected.pipelineLabel}</div>
+                                <div class="ona-abm-score-l">Open pipeline<c-ona-help-tip term="open-pipeline" position="right"></c-ona-help-tip></div>
+                            </div>
+                        </div>
+
+                        <!-- Top contacts -->
+                        <div class="ona-abm-panel-sec">
+                            <div class="ona-abm-panel-seclbl">Top contacts</div>
+                            <template for:each={abmSelected.topContacts} for:item="c">
+                                <div key={c.name} class="ona-abm-contact-row">
+                                    <div class="ona-abm-contact-init" style={c.initStyle}>{c.initials}</div>
+                                    <div class="ona-abm-contact-info">
+                                        <div class="ona-abm-contact-name">{c.name}</div>
+                                        <div class="ona-abm-contact-title">{c.titleInfluence}</div>
+                                    </div>
+                                    <div class="ona-abm-contact-vel" style={c.velStyle}></div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Actions — using same button styles as campaign card -->
+                        <div class="ona-abm-panel-actions">
+                            <div class="ona-abm-panel-seclbl">Recommended actions</div>
+                            <button class="ona-camp-btn-primary" data-id={abmSelected.id} onclick={handleABMOpenGraph}>
+                                Open relationship map →
+                            </button>
+                            <button class="ona-camp-btn-secondary" data-id={abmSelected.id} onclick={handleABMAddCampaign}>
+                                Add cooling contacts to campaign
+                            </button>
+                            <button class="ona-camp-btn-secondary" data-id={abmSelected.id} onclick={handleABMFindIntro}>
+                                Q4 · Who should I engage next?
+                            </button>
+                        </div>
+
+                    </template>
+                    <template if:false={abmSelected}>
+                        <div class="ona-abm-panel-empty">
+                            <div class="ona-abm-panel-empty-ico">🎯</div>
+                            <div class="ona-abm-panel-empty-title">Select an account</div>
+                            <div class="ona-abm-panel-empty-sub">Click any bubble on the chart to see the full action plan for that account</div>
+                        </div>
+                    </template>
+                </div>
+
+            </div>
+            </template>
+
+        </div>
+        </template>
+        <!-- END ABM MAP VIEW -->
+
     </div>
     </template>
 
@@ -576,9 +821,20 @@
                 <div class="ona-sp-title">{summaryData.acctName}</div>
                 <div class="ona-sp-sub">{summaryData.acctSub}</div>
             </div>
-            <button class="ona-sp-fullbtn" onclick={closeSummary}>View Full Summary ↗</button>
             <button class="ona-sp-close" onclick={closeSummary}>✕</button>
         </div>
+        <!-- Download CTA — pinned below header, always visible -->
+        <template if:true={summaryHasData}>
+        <div class="ona-sp-dl-bar">
+            <div class="ona-sp-dl-info">
+                <div class="ona-sp-dl-title">📄 Relationship Handover Pack</div>
+                <div class="ona-sp-dl-sub">8-page report · Buying committee · Risk · 30-60-90 plan · Methodology</div>
+            </div>
+            <button class="ona-sp-dl-btn" onclick={handleDownloadHandoverPack}>
+                ↓ Download PDF
+            </button>
+        </div>
+        </template>
 
         <div class="ona-sp-body">
         <template if:false={summaryHasData}>
@@ -864,6 +1120,7 @@
                                 <template for:each={cascadeIsolated} for:item="ci">
                                     <span key={ci.id} class="ona-cas-chip">⚠ {ci.name}</span>
                                 </template>
+
                             </div>
                         </template>
                         <template if:false={hasCascadeIsolated}>
@@ -919,7 +1176,375 @@
     </div>
     </template>
 
+    <!-- ══ ACCOUNT COMPARISON PANE ════════════════════════════════ -->
+    <template if:true={isCompareMode}>
+    <div class="ona-cmp-shell">
+
+        <!-- Search bar -->
+        <div class="ona-cmp-search-bar">
+            <div class="ona-cmp-search-wrap">
+                <div class="ona-cmp-search-lbl">Account A</div>
+                <div style="position:relative">
+                    <input class="ona-cmp-input" type="text" placeholder="Search first account…"
+                        value={compareSearchA} oninput={handleCmpSearchA}/>
+                    <template if:true={hasCmpDropA}>
+                    <div class="ona-cmp-dropdown">
+                        <template for:each={cmpDropA} for:item="acc">
+                            <div key={acc.Id} class="ona-cmp-drop-item"
+                                data-id={acc.Id} data-name={acc.Name} data-side="a"
+                                onclick={handleCmpSelect}>{acc.Name}</div>
+                        </template>
+                    </div>
+                    </template>
+                </div>
+            </div>
+            <div class="ona-cmp-vs-badge">VS</div>
+            <div class="ona-cmp-search-wrap">
+                <div class="ona-cmp-search-lbl">Account B</div>
+                <div style="position:relative">
+                    <input class="ona-cmp-input" type="text" placeholder="Search second account…"
+                        value={compareSearchB} oninput={handleCmpSearchB}/>
+                    <template if:true={hasCmpDropB}>
+                    <div class="ona-cmp-dropdown">
+                        <template for:each={cmpDropB} for:item="acc">
+                            <div key={acc.Id} class="ona-cmp-drop-item"
+                                data-id={acc.Id} data-name={acc.Name} data-side="b"
+                                onclick={handleCmpSelect}>{acc.Name}</div>
+                        </template>
+                    </div>
+                    </template>
+                </div>
+            </div>
+            <button class="ona-hbtn" style="margin-left:8px;padding:7px 18px" onclick={handleRunComparison}>Compare →</button>
+        </div>
+
+        <!-- Empty state -->
+        <template if:false={hasCmpResults}>
+        <div class="ona-cmp-empty">
+            <div class="ona-cmp-empty-icon">⇌</div>
+            <div class="ona-cmp-empty-title">Select two accounts to compare</div>
+            <div class="ona-cmp-empty-sub">Search for any two accounts above and click Compare</div>
+        </div>
+        </template>
+
+        <!-- Results -->
+        <template if:true={hasCmpResults}>
+        <div class="ona-cmp-results">
+
+            <!-- Account headers -->
+            <div class="ona-cmp-acct-headers">
+                <div class="ona-cmp-acct-card" style={cmpResults.headerStyleA}>
+                    <div class="ona-cmp-acct-name">{cmpResults.nameA}</div>
+                    <span class="ona-cmp-acct-badge" style={cmpResults.badgeStyleA}>{cmpResults.badgeA}</span>
+                    <div class="ona-cmp-acct-meta">{cmpResults.metaA}</div>
+                </div>
+                <div class="ona-cmp-vs-mid">VS</div>
+                <div class="ona-cmp-acct-card" style={cmpResults.headerStyleB}>
+                    <div class="ona-cmp-acct-name">{cmpResults.nameB}</div>
+                    <span class="ona-cmp-acct-badge" style={cmpResults.badgeStyleB}>{cmpResults.badgeB}</span>
+                    <div class="ona-cmp-acct-meta">{cmpResults.metaB}</div>
+                </div>
+            </div>
+
+            <!-- Network size tiles -->
+            <div class="ona-cmp-section-lbl">Network Size</div>
+            <div class="ona-cmp-tiles-row">
+                <div class="ona-cmp-tiles-side">
+                    <template for:each={cmpResults.tilesA} for:item="t">
+                        <div key={t.lbl} class={t.cls}>
+                            <div class="ona-cmp-tile-v">{t.val}</div>
+                            <div class="ona-cmp-tile-l">{t.lbl}</div>
+                        </div>
+                    </template>
+                </div>
+                <div class="ona-cmp-vs-mid"></div>
+                <div class="ona-cmp-tiles-side">
+                    <template for:each={cmpResults.tilesB} for:item="t">
+                        <div key={t.lbl} class={t.cls}>
+                            <div class="ona-cmp-tile-v">{t.val}</div>
+                            <div class="ona-cmp-tile-l">{t.lbl}</div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Score rows -->
+            <div class="ona-cmp-section-lbl" style="margin-top:14px">Relationship Scores</div>
+            <template for:each={cmpResults.scoreRows} for:item="row">
+                <div key={row.lbl} class="ona-cmp-score-row">
+                    <div class="ona-cmp-score-side">
+                        <div class="ona-cmp-score-top">
+                            <span class="ona-cmp-score-val" style={row.styleA}>{row.valA}</span>
+                            <template if:true={row.winA}><span class="ona-cmp-win-badge">Winner ✓</span></template>
+                        </div>
+                        <div class="ona-cmp-bar-track"><div class="ona-cmp-bar-fill" style={row.barStyleA}></div></div>
+                    </div>
+                    <div class="ona-cmp-score-lbl-mid">{row.lbl}</div>
+                    <div class="ona-cmp-score-side">
+                        <div class="ona-cmp-score-top">
+                            <template if:true={row.winB}><span class="ona-cmp-win-badge">Winner ✓</span></template>
+                            <span class="ona-cmp-score-val" style={row.styleB}>{row.valB}</span>
+                        </div>
+                        <div class="ona-cmp-bar-track"><div class="ona-cmp-bar-fill" style={row.barStyleB}></div></div>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Velocity -->
+            <div class="ona-cmp-section-lbl" style="margin-top:14px">Engagement Velocity</div>
+            <div class="ona-cmp-vel-row">
+                <div class="ona-cmp-vel-side">
+                    <template for:each={cmpResults.velA} for:item="v">
+                        <div key={v.lbl} class="ona-cmp-vel-item">
+                            <div class="ona-cmp-vel-dot" style={v.dotStyle}></div>
+                            <span class="ona-cmp-vel-lbl">{v.lbl}</span>
+                            <div class="ona-cmp-vel-bar-track">
+                                <div class="ona-cmp-vel-bar-fill" style={v.barStyle}></div>
+                            </div>
+                            <span class="ona-cmp-vel-num">{v.count}</span>
+                        </div>
+                    </template>
+                </div>
+                <div class="ona-cmp-vs-mid"></div>
+                <div class="ona-cmp-vel-side">
+                    <template for:each={cmpResults.velB} for:item="v">
+                        <div key={v.lbl} class="ona-cmp-vel-item">
+                            <div class="ona-cmp-vel-dot" style={v.dotStyle}></div>
+                            <span class="ona-cmp-vel-lbl">{v.lbl}</span>
+                            <div class="ona-cmp-vel-bar-track">
+                                <div class="ona-cmp-vel-bar-fill" style={v.barStyle}></div>
+                            </div>
+                            <span class="ona-cmp-vel-num">{v.count}</span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Top influencers -->
+            <div class="ona-cmp-section-lbl" style="margin-top:14px">Top Influencers</div>
+            <div class="ona-cmp-inf-row">
+                <div class="ona-cmp-inf-side">
+                    <template for:each={cmpResults.inflA} for:item="inf">
+                        <div key={inf.id} class="ona-cmp-inf-item">
+                            <div class="ona-cmp-inf-av" style={inf.avStyle}>{inf.ini}</div>
+                            <div style="flex:1;min-width:0">
+                                <div class="ona-cmp-inf-name">{inf.name}</div>
+                                <div class="ona-cmp-inf-title">{inf.title}</div>
+                            </div>
+                            <span class="ona-cmp-inf-score">{inf.score}</span>
+                        </div>
+                    </template>
+                </div>
+                <div class="ona-cmp-vs-mid"></div>
+                <div class="ona-cmp-inf-side">
+                    <template for:each={cmpResults.inflB} for:item="inf">
+                        <div key={inf.id} class="ona-cmp-inf-item">
+                            <div class="ona-cmp-inf-av" style={inf.avStyle}>{inf.ini}</div>
+                            <div style="flex:1;min-width:0">
+                                <div class="ona-cmp-inf-name">{inf.name}</div>
+                                <div class="ona-cmp-inf-title">{inf.title}</div>
+                            </div>
+                            <span class="ona-cmp-inf-score">{inf.score}</span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Risk signals -->
+            <div class="ona-cmp-section-lbl" style="margin-top:14px">Risk Signals</div>
+            <div class="ona-cmp-risk-row">
+                <div class="ona-cmp-risk-side">
+                    <template for:each={cmpResults.riskA} for:item="r">
+                        <div key={r.lbl} class="ona-cmp-risk-item">
+                            <span class="ona-cmp-risk-ico">{r.ico}</span>
+                            <span style={r.style}>{r.lbl}</span>
+                        </div>
+                    </template>
+                </div>
+                <div class="ona-cmp-vs-mid"></div>
+                <div class="ona-cmp-risk-side">
+                    <template for:each={cmpResults.riskB} for:item="r">
+                        <div key={r.lbl} class="ona-cmp-risk-item">
+                            <span class="ona-cmp-risk-ico">{r.ico}</span>
+                            <span style={r.style}>{r.lbl}</span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+        </div>
+        </template>
+    </div>
+    </template>
+
     <!-- ══ GUIDE OVERLAY ══════════════════════════════════════════════ -->
+    <!-- ══ CAMPAIGN SLIDE-OVER PANEL ════════════════════════════════ -->
+    <template if:true={campPanelOpen}>
+    <div class="ona-camp-overlay">
+        <div class="ona-camp-drawer">
+
+            <!-- ── HEADER ─────────────────────────────────── -->
+            <div class="ona-camp-hdr">
+                <div class="ona-camp-hdr-icon">📢</div>
+                <div class="ona-camp-hdr-text">
+                    <div class="ona-camp-hdr-title">Add to Campaign</div>
+                    <div class="ona-camp-hdr-sub">{campAutoLabel}</div>
+                </div>
+                <button class="ona-camp-close" onclick={handleCloseCampPanel} title="Close">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- ── RISK FILTER CHIPS ───────────────────────── -->
+            <div class="ona-camp-chips-section">
+                <div class="ona-camp-chips-label">Smart filter</div>
+                <div class="ona-camp-chips-row">
+                    <button class={campChipCooling} data-filter="cooling" onclick={handleCampChip}>
+                        <span class="ona-camp-chip-dot" style="background:#f59e0b"></span>↓ Cooling
+                    </button>
+                    <button class={campChipCold} data-filter="cold" onclick={handleCampChip}>
+                        <span class="ona-camp-chip-dot" style="background:#38bdf8"></span>❄ Cold
+                    </button>
+                    <button class={campChipDark} data-filter="dark" onclick={handleCampChip}>
+                        <span class="ona-camp-chip-dot" style="background:#94a3b8"></span>◉ Dark
+                    </button>
+                </div>
+                <div class="ona-camp-chips-row" style="margin-top:5px">
+                    <button class="ona-camp-chip-outline" onclick={handleCampSelectAll}>✦ All at-risk</button>
+                    <button class="ona-camp-chip-outline" onclick={handleCampClearSelection}>✕ Clear all</button>
+                </div>
+            </div>
+
+            <!-- ── SELECTED CONTACTS ──────────────────────── -->
+            <div class="ona-camp-contacts-hdr">
+                <span class="ona-camp-contacts-lbl">Selected contacts</span>
+                <span class="ona-camp-contacts-count">{campSelCountLabel}</span>
+            </div>
+            <div class="ona-camp-sel-list">
+                <template if:true={hasCampSelected}>
+                    <template for:each={campSelectedContacts} for:item="c">
+                        <div key={c.contactId} class="ona-camp-sel-item">
+                            <div class="ona-camp-av" style={c.avStyle}>{c.initials}</div>
+                            <div class="ona-camp-sel-info">
+                                <div class="ona-camp-sel-name">{c.name}</div>
+                                <div class="ona-camp-sel-risk">{c.riskLabel}</div>
+                            </div>
+                            <button class="ona-camp-rm" data-id={c.contactId} onclick={handleCampDeselect} title="Remove">
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                                    <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </template>
+                </template>
+                <template if:false={hasCampSelected}>
+                    <div class="ona-camp-empty">
+                        <div class="ona-camp-empty-ico">👥</div>
+                        <div class="ona-camp-empty-msg">No contacts selected.<br/>Use filters above or click nodes on the graph.</div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- ── DIVIDER ────────────────────────────────── -->
+            <div class="ona-camp-divider"></div>
+
+            <!-- ── CAMPAIGN SECTION ───────────────────────── -->
+            <div class="ona-camp-section">
+                <div class="ona-camp-section-title">Campaign</div>
+
+                <!-- Mode tabs -->
+                <div class="ona-camp-tabs">
+                    <button class={campModeExistingClass} data-mode="existing" onclick={handleCampModeToggle}>Use existing</button>
+                    <button class={campModeNewClass}      data-mode="new"      onclick={handleCampModeToggle}>Create new</button>
+                </div>
+
+                <!-- Existing campaign picker -->
+                <template if:true={campModeIsExisting}>
+                    <div class="ona-camp-field">
+                        <label class="ona-camp-lbl">Select campaign</label>
+                        <div class="ona-camp-select-wrap">
+                            <select class="ona-camp-select" onchange={handleCampPick}>
+                                <option value="">— Choose a campaign —</option>
+                                <template for:each={existingCampaigns} for:item="camp">
+                                    <option key={camp.Id} value={camp.Id}>{camp.Name}</option>
+                                </template>
+                            </select>
+                        </div>
+                        <template if:true={campLoading}>
+                            <div class="ona-camp-loading">
+                                <span class="ona-camp-loading-dot"></span>Loading campaigns…
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- New campaign form -->
+                <template if:true={campModeIsNew}>
+                    <div class="ona-camp-field">
+                        <label class="ona-camp-lbl">Campaign name <span style="color:var(--dn)">*</span></label>
+                        <input class="ona-camp-input" type="text" placeholder="e.g. Re-engagement Q3 2026" value={newCampName} oninput={handleNewCampName}/>
+                    </div>
+                    <div class="ona-camp-field">
+                        <label class="ona-camp-lbl">Type</label>
+                        <div class="ona-camp-select-wrap">
+                            <select class="ona-camp-select" onchange={handleNewCampType}>
+                                <option value="Email">📧 Email</option>
+                                <option value="Event">🎪 Event</option>
+                                <option value="Webinar">💻 Webinar</option>
+                                <option value="Direct Mail">📬 Direct Mail</option>
+                                <option value="Other">📌 Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="ona-camp-date-row">
+                        <div class="ona-camp-field" style="flex:1">
+                            <label class="ona-camp-lbl">Start date</label>
+                            <input class="ona-camp-input" type="date" value={newCampStart} onchange={handleNewCampStart}/>
+                        </div>
+                        <div class="ona-camp-field" style="flex:1">
+                            <label class="ona-camp-lbl">End date</label>
+                            <input class="ona-camp-input" type="date" value={newCampEnd} onchange={handleNewCampEnd}/>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Member status -->
+                <div class="ona-camp-field">
+                    <label class="ona-camp-lbl">Member status</label>
+                    <div class="ona-camp-status-row">
+                        <button class={campStatusSent}      data-status="Sent"      onclick={handleCampStatusBtn}>Sent</button>
+                        <button class={campStatusResponded} data-status="Responded" onclick={handleCampStatusBtn}>Responded</button>
+                        <button class={campStatusPlanned}   data-status="Planned"   onclick={handleCampStatusBtn}>Planned</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── FOOTER ACTIONS ─────────────────────────── -->
+            <div class="ona-camp-footer">
+                <template if:true={campLastAdded}>
+                    <div class="ona-camp-success">
+                        <div class="ona-camp-success-ico">✓</div>
+                        <div class="ona-camp-success-body">
+                            <div class="ona-camp-success-msg">{campLastAdded}</div>
+                            <button class="ona-camp-success-link" data-id={campLastId} onclick={handleOpenCampaign}>
+                                Open Campaign record ↗
+                            </button>
+                        </div>
+                    </div>
+                </template>
+                <button class="ona-camp-btn-add" disabled={campAddDisabled} onclick={handleCampAdd}>
+                    Add {campSelCountLabel} to Campaign
+                </button>
+                <button class="ona-camp-btn-cancel" onclick={handleCloseCampPanel}>Cancel</button>
+            </div>
+
+        </div>
+    </div>
+    </template>
+    <!-- ══ END CAMPAIGN SLIDE-OVER ════════════════════════════════════ -->
+
     <template if:true={guideOpen}>
         <div class="ona-guide-overlay" onclick={handleGuideOverlayClick}>
             <div class="ona-guide-spotlight" style={spotlightStyle}></div>

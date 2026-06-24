@@ -61,8 +61,25 @@ public with sharing class ONAModels {
         @AuraEnabled public String  department;   // Department — used in Coverage Score (Alg 10)
         @AuraEnabled public String  accountName;  // Account name — shown in hover tooltip
         @AuraEnabled public String  email;        // Email address
+        @AuraEnabled public String  phone;        // Office phone
+        @AuraEnabled public String  mobilePhone;  // Mobile phone
         @AuraEnabled public String  country;      // Mailing country
         @AuraEnabled public String  region;       // Derived region (Americas / APAC / EMEA)
+
+        // ── Data Completeness (v4.5) ─────────────────────────────────────────
+        // Plain field-presence check — NOT a "verified accurate" claim.
+        // Used to flag contacts where ONA's scores may be less reliable
+        // because core fields (phone/mobile, email, title) are missing.
+        @AuraEnabled public String  completenessLevel; // 'complete' / 'partial' / 'incomplete'
+        @AuraEnabled public Integer completenessCount; // 0-3, how many of the 3 checks passed
+
+        // ── Champion Risk (v4.6) ──────────────────────────────────────────────
+        // A "Champion" is inferred, not a stored field — high Influence Score
+        // (senior + well-connected + previously engaged) whose engagement has
+        // now flipped to Cooling. Computed live on every graph load; nothing
+        // persisted, no Task created. See applyChampionRisk() in ONAController.
+        @AuraEnabled public Boolean isChampionRisk;
+        @AuraEnabled public String  championRiskReason;
 
         // ── Phase 1 Scores ────────────────────────────────────────────────────
         // Computed by algorithms 1-4. All normalised to 0-100.
@@ -174,8 +191,26 @@ public with sharing class ONAModels {
             this.department        = c.Department != null ? c.Department : '';
             this.accountName       = c.Account    != null ? c.Account.Name : '';
             this.email             = c.Email      != null ? c.Email      : '';
+            this.phone             = c.Phone      != null ? c.Phone      : '';
+            this.mobilePhone       = c.MobilePhone != null ? c.MobilePhone : '';
             this.country           = c.MailingCountry != null ? c.MailingCountry : '';
             this.region            = ONAModels.deriveRegion(c.MailingCountry);
+
+            // Completeness check: Phone-OR-Mobile, Email, Title — 3 checks total.
+            // Phone and Mobile count as ONE check (satisfied by either) since
+            // most orgs populate one or the other, not both.
+            Integer completeCount = 0;
+            if (String.isNotBlank(c.Phone) || String.isNotBlank(c.MobilePhone)) completeCount++;
+            if (String.isNotBlank(c.Email)) completeCount++;
+            if (String.isNotBlank(c.Title)) completeCount++;
+            this.completenessCount = completeCount;
+            this.completenessLevel = completeCount == 3 ? 'complete'
+                                    : completeCount >= 1 ? 'partial'
+                                    : 'incomplete';
+            // Champion Risk — computed later in ONAController.applyChampionRisk()
+            // once influenceScore, velocityLabel, and decayScore are all final.
+            this.isChampionRisk     = false;
+            this.championRiskReason = '';
             // Scores — all start at 0, populated by algorithms
             this.influenceScore    = 0;
             this.centralityScore   = 0;
