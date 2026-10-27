@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520" role="img" aria-labelledby="title desc">
+  <title id="title">ONA Relationship Intelligence</title>
+  <desc id="desc">Enterprise relationship intelligence for Salesforce, combining a network graph with account coverage and engagement signals.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f7fbff"/><stop offset="55%" stop-color="#eef5fb"/><stop offset="100%" stop-color="#e8f3f7"/></linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#0878b9"/><stop offset="100%" stop-color="#12a6a0"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#17324d" flood-opacity="0.12"/></filter>
+  </defs>
+  <rect width="1600" height="520" rx="28" fill="url(#bg)"/>
+  <circle cx="1390" cy="70" r="250" fill="#d9eef4" opacity=".62"/><circle cx="1530" cy="430" r="230" fill="#d9e7f4" opacity=".55"/>
+  <path d="M0 430 C220 350,380 540,610 470 S1050 360,1290 450 S1490 500,1600 420 V520 H0Z" fill="#dbeef1" opacity=".55"/>
+  <g stroke="#95b8cc" stroke-width="2" stroke-linecap="round" opacity=".62" fill="none"><path d="M1000 140 L1125 95 L1255 150 L1375 92 L1490 155"/><path d="M1000 140 L1080 250 L1255 150 L1280 325 L1420 270 L1490 155"/><path d="M1080 250 L1160 375 L1280 325 L1420 400 L1420 270"/><path d="M1255 150 L1420 270"/><path d="M1160 375 L1045 410"/></g>
+  <g filter="url(#shadow)"><rect x="1010" y="78" width="480" height="360" rx="24" fill="#fff" stroke="#d7e5ee"/><rect x="1040" y="105" width="420" height="42" rx="12" fill="#f5f9fc"/><circle cx="1062" cy="126" r="6" fill="#0c8bba"/><text x="1080" y="132" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="700" fill="#23415a">RELATIONSHIP NETWORK</text>
+    <g stroke="#a1b8ca" stroke-width="2" fill="none"><path d="M1092 206 L1170 184 L1250 220 L1334 178 L1411 228"/><path d="M1092 206 L1142 288 L1250 220 L1287 332 L1398 310 L1411 228"/><path d="M1142 288 L1214 374 L1287 332 L1398 310"/><path d="M1170 184 L1214 374"/></g>
+    <g><circle cx="1092" cy="206" r="13" fill="#1784b8"/><circle cx="1170" cy="184" r="10" fill="#7c8da5"/><circle cx="1250" cy="220" r="17" fill="#d28a22"/><circle cx="1334" cy="178" r="12" fill="#118c83"/><circle cx="1411" cy="228" r="13" fill="#1784b8"/><circle cx="1142" cy="288" r="10" fill="#8294a8"/><circle cx="1287" cy="332" r="13" fill="#118c83"/><circle cx="1398" cy="310" r="10" fill="#d28a22"/><circle cx="1214" cy="374" r="9" fill="#8294a8"/></g>
+    <g font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" fill="#5c7185"><text x="1075" y="188">Connector</text><text x="1221" y="198">Hub</text><text x="1302" y="157">Influencer</text><text x="1320" y="358">Growing</text></g>
+  </g>
+  <g font-family="Inter,Segoe UI,Arial,sans-serif"><text x="82" y="93" font-size="18" letter-spacing="4" font-weight="700" fill="#0b7f9b">SALESFORCE · ORGANIZATIONAL NETWORK ANALYSIS</text><text x="78" y="190" font-size="66" font-weight="800" letter-spacing="-2" fill="#122b45">ONA Relationship</text><text x="78" y="265" font-size="66" font-weight="800" letter-spacing="-2" fill="#122b45">Intelligence</text><rect x="82" y="294" width="112" height="7" rx="3.5" fill="url(#accent)"/><text x="82" y="346" font-size="25" font-weight="600" fill="#35566f">See the network behind every account.</text><text x="82" y="384" font-size="21" fill="#52718a">Surface relationship signals, account coverage,</text><text x="82" y="414" font-size="21" fill="#52718a">engagement shifts and potential risk.</text>
+    <g transform="translate(82 454)"><rect width="176" height="38" rx="19" fill="#e1f0f5" stroke="#c3e1ea"/><text x="88" y="24" text-anchor="middle" font-size="14" font-weight="700" fill="#155e75">NETWORK ANALYTICS</text><rect x="190" width="172" height="38" rx="19" fill="#e3edf9" stroke="#cbdcf1"/><text x="276" y="24" text-anchor="middle" font-size="14" font-weight="700" fill="#245a8d">ACCOUNT HEALTH</text><rect x="376" width="172" height="38" rx="19" fill="#e0f3ec" stroke="#c4e8db"/><text x="462" y="24" text-anchor="middle" font-size="14" font-weight="700" fill="#176e57">ACTIONABLE SIGNALS</text></g>
+  </g>
+</svg>
